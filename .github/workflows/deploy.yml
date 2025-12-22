@@ -6,6 +6,10 @@ on:
       - main
       - master
 
+permissions:
+  contents: write
+  pages: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -27,8 +31,12 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Check dist directory
+        run: ls -la frontend/dist/ || echo "dist directory not found!"
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./frontend/dist
+          force_orphan: true
