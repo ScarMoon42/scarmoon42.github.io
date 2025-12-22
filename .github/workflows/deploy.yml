@@ -45,9 +45,6 @@ jobs:
         with:
           path: 'frontend/dist'
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
   deploy:
     environment:
       name: github-pages
