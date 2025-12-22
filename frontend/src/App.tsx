@@ -39,7 +39,7 @@ export default function App() {
     },
     {
       id: "3",
-      name: "Сидоров Петр Александрович",
+      name: "Сидоров Иван Александрович",
       position: "Профессор",
       department: "Физики",
       applicationDate: "25.11.2025",
