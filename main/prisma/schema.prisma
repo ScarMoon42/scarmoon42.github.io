@@ -1,0 +1,214 @@
+// Prisma schema — монолитная архитектура, PostgreSQL 17+
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Пользователи ---
+
+model User {
+  id             Int       @id @default(autoincrement())
+  externalId     String?   @unique @map("external_id") // sub из Keycloak
+  login          String    @unique
+  password       String?
+  fullName       String    @map("full_name") // ФИО
+  role           String // Преподаватель | Эксперт | Внешний эксперт | Секретарь
+  positions      String? // должность
+  department     String?
+  expirationDate DateTime? @map("expiration_date") // для временных аккаунтов
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  files            File[]
+  openClass        OpenClass[]
+  testResults      ResultTestTeacher[] @relation("UserTestResults")
+  resultFiles      ResultFiles[]
+  openClassExperts OpenClassExpert[]
+  // Обратные связи для созданных форм (секретарь)
+  formCreators     FormFiles[]         @relation("UserFormCreators")
+
+  // Назначения экспертов (как учитель или как эксперт)
+  teacherAssignments ExpertAssignment[] @relation("TeacherToAssignment")
+  expertAssignments  ExpertAssignment[] @relation("ExpertToAssignment")
+
+  @@index([login, role])
+  @@index([expirationDate])
+  @@map("users")
+}
+
+model Position {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+
+  @@map("positions")
+}
+
+model Department {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+
+  @@map("departments")
+}
+
+model ExpertAssignment {
+  id        Int      @id @default(autoincrement())
+  teacherId Int      @map("teacher_id")
+  expertId  Int      @map("expert_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  teacher User @relation("TeacherToAssignment", fields: [teacherId], references: [id], onDelete: Cascade)
+  expert  User @relation("ExpertToAssignment", fields: [expertId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, expertId])
+  @@index([expertId])
+  @@map("expert_assignments")
+}
+
+// --- Файлы пользователя ---
+
+model File {
+  id        Int      @id @default(autoincrement())
+  name      String
+  path      String
+  comment   String?
+  status    String
+  expertComment String? @map("expert_comment")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  Int               @map("user_id")
+  results ResultFilesFile[]
+
+  @@index([userId])
+  @@map("files")
+}
+
+// --- Результаты тестирования и анкетирования ---
+
+model FormFiles {
+  id          Int                 @id @default(autoincrement())
+  name        String?
+  description String?
+  file        String
+  parsedData  String?             @map("parsed_data")
+  formType    String?             @map("form_type")
+  uploadedBy  Int?                @map("uploaded_by")
+  user        User?               @relation("UserFormCreators", fields: [uploadedBy], references: [id], onDelete: Cascade)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  results     ResultFiles[]
+  testResults ResultTestTeacher[]
+  studentOpenClassResults  ResultOpenClassStudent[]
+  expertOpenClassResults   ResultOpenClassExpert[]
+
+  @@index([uploadedBy])
+  @@index([formType])
+  @@map("form_files")
+}
+
+model ResultTestTeacher {
+  id     Int    @id @default(autoincrement())
+  result String
+
+  teacher   User      @relation("UserTestResults", fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId Int       @map("teacher_id")
+  test      FormFiles @relation(fields: [testId], references: [id], onDelete: Cascade)
+  testId    Int       @map("test_id")
+
+  @@unique([teacherId, testId])
+  @@index([teacherId])
+  @@map("result_test_teachers")
+}
+
+// --- Открытые занятия ---
+
+model OpenClass {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  room      String? // аудитория
+  time      String? // время (HH:MM)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  teacher         User                     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId       Int                      @map("teacher_id")
+  experts         OpenClassExpert[]
+  resultsStudents ResultOpenClassStudent[]
+  resultsExperts  ResultOpenClassExpert[]
+
+  @@index([teacherId, date])
+  @@map("open_classes")
+}
+
+model OpenClassExpert {
+  id          Int       @id @default(autoincrement())
+  openClass   OpenClass @relation(fields: [openClassId], references: [id], onDelete: Cascade)
+  openClassId Int       @map("open_class_id")
+  expert      User      @relation(fields: [expertId], references: [id], onDelete: Cascade)
+  expertId    Int       @map("expert_id")
+
+  @@unique([openClassId, expertId])
+  @@index([expertId])
+  @@map("open_class_experts")
+}
+
+model ResultOpenClassStudent {
+  id          Int       @id @default(autoincrement())
+  ssid        String
+  result      String
+  form        FormFiles @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId      Int       @map("form_id")
+  openClass   OpenClass @relation(fields: [openClassId], references: [id], onDelete: Cascade)
+  openClassId Int       @map("open_class_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([ssid, openClassId])
+  @@index([openClassId])
+  @@map("result_open_class_students")
+}
+
+model ResultOpenClassExpert {
+  id          Int       @id @default(autoincrement())
+  result      String
+  form        FormFiles @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId      Int       @map("form_id")
+  openClass   OpenClass @relation(fields: [openClassId], references: [id], onDelete: Cascade)
+  openClassId Int       @map("open_class_id")
+
+  @@index([openClassId])
+  @@map("result_open_class_experts")
+}
+
+// --- Результаты по файлам (связь многие-ко-многим с File через join-таблицу) ---
+
+model ResultFiles {
+  id       Int    @id @default(autoincrement())
+  idExpert Int    @map("id_expert")
+  result   String
+
+  form      FormFiles         @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId    Int               @map("form_id")
+  teacher   User              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacherId Int               @map("teacher_id")
+  files     ResultFilesFile[]
+
+  @@index([teacherId, formId])
+  @@map("result_files")
+}
+
+model ResultFilesFile {
+  id            Int         @id @default(autoincrement())
+  resultFiles   ResultFiles @relation(fields: [resultFilesId], references: [id], onDelete: Cascade)
+  resultFilesId Int         @map("result_files_id")
+  file          File        @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  fileId        Int         @map("file_id")
+
+  @@unique([resultFilesId, fileId])
+  @@index([fileId])
+  @@map("result_files_files")
+}

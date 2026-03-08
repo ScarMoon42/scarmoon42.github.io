@@ -23,24 +23,24 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        working-directory: frontend
+        working-directory: main
         run: npm install --legacy-peer-deps
 
       - name: Build
-        working-directory: frontend
+        working-directory: main
         run: npm run build
 
       - name: List dist contents
         run: |
           echo "=== Checking dist folder ==="
-          ls -lah frontend/dist/
+          ls -lah main/dist/
           echo "=== Total files ==="
-          find frontend/dist -type f | wc -l
+          find main/dist -type f | wc -l
 
       - name: Deploy with gh-pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./frontend/dist
+          publish_dir: ./main/dist
           cname: 
           force_orphan: true
