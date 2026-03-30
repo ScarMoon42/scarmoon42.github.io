@@ -100,11 +100,7 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_RELATIVE_PATH: /auth
     ports:
-<<<<<<< Updated upstream
-      - "${KEYCLOAK_PORT:-8080}:8080"  # Оставляем для OAuth редиректов с браузера
-=======
       - "127.0.0.1:8080:8080"  # Доступ через локальный прокси Nginx
->>>>>>> Stashed changes
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import
     command:
@@ -120,11 +116,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-<<<<<<< Updated upstream
-      - "${APP_PORT:-3000}:3001"  # Основной порт приложения
-=======
       - "127.0.0.1:3000:3001"  # Доступ через локальный прокси Nginx
->>>>>>> Stashed changes
     environment:
       - DATABASE_URL=postgresql://postgres:password@db:5432/myapp?schema=public
       - REDIS_URL=redis://redis:6379
