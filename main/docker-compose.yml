@@ -119,7 +119,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - PORT=3001
       - KEYCLOAK_URL=http://keycloak:8080
-      - KEYCLOAK_FRONTEND_URL=http://localhost:8080 # Замените на публичный URL Keycloak при деплое (например, https://auth.domain.com)
+      - KEYCLOAK_FRONTEND_URL=${KEYCLOAK_FRONTEND_URL:-http://localhost:8080} # Замените на публичный URL Keycloak при деплое (например, https://auth.domain.com)
       - KEYCLOAK_REALM=app
       - KEYCLOAK_CLIENT_ID=frontend
       - LOKI_URL=http://loki:3100      # Добавлено для логирования
