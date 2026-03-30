@@ -1,23 +1,49 @@
 import Keycloak from 'keycloak-js';
 
-const url = import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080';
-const realm = import.meta.env.VITE_KEYCLOAK_REALM || 'app';
-const clientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'frontend';
-
-console.log('Keycloak config:', { url, realm, clientId });
-
-export const keycloak = new Keycloak({
-  url,
-  realm,
-  clientId,
-});
+// We will fetch this dynamically from /keycloak-status or use import.meta.env as fallback
+export let keycloak: Keycloak;
 
 let initPromise: Promise<boolean> | null = null;
+
+async function fetchKeycloakConfig() {
+  try {
+    const basePath = import.meta.env.BASE_URL.replace(/\/+$/, '');
+    const res = await fetch(`${basePath}/api/keycloak-status`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.keycloak) {
+        return {
+          url: data.keycloak.url,
+          realm: data.keycloak.realm,
+          clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'frontend',
+        };
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to fetch Keycloak config from backend, using fallback', error);
+  }
+
+  // Fallback to build-time vars
+  return {
+    url: import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8080',
+    realm: import.meta.env.VITE_KEYCLOAK_REALM || 'app',
+    clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'frontend',
+  };
+}
 
 /**
  * Инициализация Keycloak с таймаутом
  */
-function initWithTimeout(timeoutMs = 10000): Promise<boolean> {
+async function initWithTimeout(timeoutMs = 10000): Promise<boolean> {
+  const config = await fetchKeycloakConfig();
+  console.log('Keycloak config:', config);
+  
+  keycloak = new Keycloak({
+    url: config.url,
+    realm: config.realm,
+    clientId: config.clientId,
+  });
+
   const basePath = import.meta.env.BASE_URL.replace(/\/+$/, '');
   return Promise.race([
     keycloak.init({
