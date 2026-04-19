@@ -8,10 +8,18 @@
   "duplicateEmailsAllowed": true,
   "roles": {
     "realm": [
-      { "name": "secretary" },
-      { "name": "teacher" },
-      { "name": "expert" },
-      { "name": "external_expert" }
+      {
+        "name": "secretary"
+      },
+      {
+        "name": "teacher"
+      },
+      {
+        "name": "expert"
+      },
+      {
+        "name": "external_expert"
+      }
     ]
   },
   "clients": [
@@ -22,10 +30,14 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["http://localhost:3000/*", "https://scarmoon.it123.ru/*"],
-      "webOrigins": ["http://localhost:3000", "https://scarmoon.it123.ru"],
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:3000/*,https://scarmoon.it123.ru/*",
+        "post.logout.redirect.uris": "http://localhost:3000/*",
         "pkce.code.challenge.method": "S256",
         "pkce.supported": "true"
       }
@@ -39,9 +51,16 @@
       "lastName": "Системы",
       "email": "secretary@example.local",
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "1234", "temporary": false }],
-      "realmRoles": ["secretary"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "secretary"
+      ]
     }
   ]
 }
-
