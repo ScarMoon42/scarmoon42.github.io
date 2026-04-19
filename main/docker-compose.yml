@@ -46,7 +46,7 @@ services:
     image: grafana/grafana:latest
     restart: unless-stopped
     ports:
-      - "3002:3000"  # Оставляем для веб-доступа к дашбордам
+      - "${GRAFANA_PORT:-3002}:3000"  # Оставляем для веб-доступа к дашбордам
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
@@ -95,9 +95,12 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_PROXY: edge
+      KC_HOSTNAME: scarmoon.it123.ru
+      KC_HOSTNAME_PATH: /auth
       KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_RELATIVE_PATH: /auth
     ports:
-      - "8080:8080"  # Оставляем для OAuth редиректов с браузера
+      - "127.0.0.1:8080:8080"  # Доступ через локальный прокси Nginx
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import
     command:
@@ -113,14 +116,17 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "3000:3001"  # Основной порт приложения
+      - "127.0.0.1:3000:3001"  # Доступ через локальный прокси Nginx
     environment:
       - DATABASE_URL=postgresql://postgres:password@db:5432/myapp?schema=public
       - REDIS_URL=redis://redis:6379
       - PORT=3001
       - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_FRONTEND_URL=${KEYCLOAK_FRONTEND_URL:-http://localhost:8080} # Замените на публичный URL Keycloak при деплое (например, https://auth.domain.com)
       - KEYCLOAK_REALM=app
       - KEYCLOAK_CLIENT_ID=frontend
+      - NODE_ENV=production
+      - CORS_ORIGIN=https://scarmoon.it123.ru
       - LOKI_URL=http://loki:3100      # Добавлено для логирования
       - PROMETHEUS_URL=http://prometheus:9090  # Если нужны метрики
     depends_on:

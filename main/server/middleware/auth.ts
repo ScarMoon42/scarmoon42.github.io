@@ -46,11 +46,16 @@ function getIssuer(): string {
 
 function getValidIssuers(): string[] {
   const realm = process.env.KEYCLOAK_REALM || 'app';
-  return [
+  const frontendUrl = process.env.KEYCLOAK_FRONTEND_URL;
+  const issuers = [
     getIssuer(),
     `http://localhost:8080/realms/${realm}`,
     `https://localhost:8080/realms/${realm}`
   ];
+  if (frontendUrl) {
+    issuers.push(`${frontendUrl.replace(/\/+$/, '')}/realms/${realm}`);
+  }
+  return issuers;
 }
 
 function mapRole(roles: string[]): AppRole {

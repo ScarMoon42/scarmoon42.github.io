@@ -76,7 +76,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.get('/keycloak-status', (_req, res) => {
-  const keycloakUrl = process.env.KEYCLOAK_URL || 'http://localhost:8080';
+  const keycloakUrl = process.env.KEYCLOAK_FRONTEND_URL || process.env.KEYCLOAK_URL || 'http://localhost:8080';
   const realm = process.env.KEYCLOAK_REALM || 'app';
 
   res.json({
