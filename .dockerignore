@@ -1,0 +1,13 @@
+node_modules/
+dist/
+uploads/
+.env
+.env.development
+.env.local
+.git/
+.github/
+.vscode/
+prisma/*.db
+prisma/*.db-journal
+logs/
+*.log

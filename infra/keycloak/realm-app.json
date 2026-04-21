@@ -1,0 +1,66 @@
+{
+  "realm": "app",
+  "enabled": true,
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "secretary"
+      },
+      {
+        "name": "teacher"
+      },
+      {
+        "name": "expert"
+      },
+      {
+        "name": "external_expert"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "frontend",
+      "name": "frontend",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:3000/*"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:3000"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://127.0.0.1:3000/*",
+        "pkce.code.challenge.method": "S256",
+        "pkce.supported": "true"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "secretary",
+      "enabled": true,
+      "firstName": "Секретарь",
+      "lastName": "Системы",
+      "email": "secretary@example.local",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "1234",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "secretary"
+      ]
+    }
+  ]
+}
