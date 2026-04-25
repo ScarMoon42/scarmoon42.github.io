@@ -5,6 +5,12 @@ export let keycloak: Keycloak;
 
 let initPromise: Promise<boolean> | null = null;
 
+function envFlag(name: string, defaultValue: boolean): boolean {
+  const raw = import.meta.env[name];
+  if (raw == null || raw === '') return defaultValue;
+  return ['1', 'true', 'yes', 'on'].includes(String(raw).trim().toLowerCase());
+}
+
 async function fetchKeycloakConfig() {
   try {
     const basePath = import.meta.env.BASE_URL.replace(/\/+$/, '');
@@ -25,7 +31,8 @@ async function fetchKeycloakConfig() {
 
   // Fallback to build-time vars
   return {
-    url: import.meta.env.VITE_KEYCLOAK_URL || 'http://127.0.0.1:8080',
+    // Keycloak in this setup is served under /auth (KC_HTTP_RELATIVE_PATH=/auth).
+    url: import.meta.env.VITE_KEYCLOAK_URL || 'http://127.0.0.1:8080/auth',
     realm: import.meta.env.VITE_KEYCLOAK_REALM || 'app',
     clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'frontend',
   };
@@ -45,18 +52,53 @@ async function initWithTimeout(timeoutMs = 10000): Promise<boolean> {
   });
 
   const basePath = import.meta.env.BASE_URL.replace(/\/+$/, '');
-  return Promise.race([
-    keycloak.init({
-      onLoad: 'check-sso',
-      pkceMethod: 'S256',
-      silentCheckSsoRedirectUri: `${window.location.origin}${basePath}/silent-check-sso.html`,
-      checkLoginIframe: false,
-      enableLogging: true,
-    }),
-    new Promise<boolean>((_, reject) =>
-      setTimeout(() => reject(new Error('Keycloak init timeout')), timeoutMs)
-    ),
-  ]);
+  const useSilentSso = envFlag('VITE_KEYCLOAK_SILENT_CHECK_SSO', false);
+  const keycloakOrigin = (() => {
+    try {
+      return new URL(config.url).origin;
+    } catch {
+      return '';
+    }
+  })();
+  const isCrossOrigin = Boolean(keycloakOrigin) && keycloakOrigin !== window.location.origin;
+  const allowSilentSso = useSilentSso && !isCrossOrigin;
+
+  if (useSilentSso && isCrossOrigin) {
+    console.warn(
+      `Silent SSO disabled: Keycloak origin (${keycloakOrigin}) differs from app origin (${window.location.origin})`
+    );
+  }
+
+  const initOptions = {
+    onLoad: 'check-sso' as const,
+    pkceMethod: 'S256' as const,
+    checkLoginIframe: false,
+    enableLogging: true,
+  };
+
+  const initPrimary = () => keycloak.init({
+    ...initOptions,
+    ...(allowSilentSso
+      ? { silentCheckSsoRedirectUri: `${window.location.origin}${basePath}/silent-check-sso.html` }
+      : {}),
+  });
+
+  try {
+    return await Promise.race([
+      initPrimary(),
+      new Promise<boolean>((_, reject) =>
+        setTimeout(() => reject(new Error('Keycloak init timeout')), timeoutMs)
+      ),
+    ]);
+  } catch (error) {
+    // If silent-check-sso fails because of CSP/iframe restrictions, retry without iframe-based SSO check.
+    if (allowSilentSso) {
+      console.warn('Silent SSO failed, retrying init without iframe check', error);
+      return keycloak.init(initOptions);
+    }
+
+    throw error;
+  }
 }
 
 export function initKeycloak(): Promise<boolean> {

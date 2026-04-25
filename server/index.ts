@@ -17,6 +17,7 @@ import filesRoutes from './routes/files';
 import openClassesRoutes from './routes/open-classes';
 import metadataRoutes from './routes/metadata';
 import assignmentRoutes from './routes/assignments';
+import { getKeycloakFrontendUrl, getKeycloakUrl } from './lib/keycloakConfig.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -56,6 +57,24 @@ app.use('/open-classes', openClassesRoutes);
 app.use('/metadata', metadataRoutes);
 app.use('/assignments', assignmentRoutes);
 
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'api' });
+});
+
+app.get('/keycloak-status', (_req, res) => {
+  const keycloakUrl = getKeycloakFrontendUrl();
+  const realm = process.env.KEYCLOAK_REALM || 'app';
+
+  res.json({
+    ok: true,
+    keycloak: {
+      url: keycloakUrl,
+      realm,
+      configUrl: `${keycloakUrl}/realms/${realm}/.well-known/openid-configuration`,
+    },
+  });
+});
+
 // Раздача статики React (SPA)
 const distPath = path.join(process.cwd(), 'dist');
 app.use(express.static(distPath));
@@ -69,24 +88,6 @@ app.get('*', (req, res, next) => {
   }
 });
 
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'api' });
-});
-
-app.get('/keycloak-status', (_req, res) => {
-  const keycloakUrl = process.env.KEYCLOAK_FRONTEND_URL || process.env.KEYCLOAK_URL || 'http://127.0.0.1:8080';
-  const realm = process.env.KEYCLOAK_REALM || 'app';
-
-  res.json({
-    ok: true,
-    keycloak: {
-      url: keycloakUrl,
-      realm,
-      configUrl: `${keycloakUrl}/realms/${realm}/.well-known/openid-configuration`,
-    },
-  });
-});
-
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Маршрут не найден' });
 });
@@ -98,5 +99,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 app.listen(PORT, () => {
   console.log(`API listening on http://127.0.0.1:${PORT}`);
-  console.log(`Keycloak: ${process.env.KEYCLOAK_URL || 'http://127.0.0.1:8080'}`);
+  console.log(`Keycloak: ${getKeycloakUrl()}`);
 });

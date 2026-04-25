@@ -1,3 +1,6 @@
+import { configureKeycloakTls } from './keycloakTls.js';
+import { getKeycloakUrl } from './keycloakConfig.js';
+
 type KeycloakUserCreate = {
   username: string;
   enabled: boolean;
@@ -9,7 +12,7 @@ type KeycloakUserCreate = {
 };
 
 function baseUrl() {
-  return (process.env.KEYCLOAK_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '');
+  return getKeycloakUrl();
 }
 
 function realm() {
@@ -25,6 +28,8 @@ function adminPassword() {
 }
 
 let cachedToken: { token: string; expMs: number } | null = null;
+
+configureKeycloakTls();
 
 async function getAdminToken(): Promise<string> {
   const now = Date.now();

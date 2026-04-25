@@ -1,5 +1,8 @@
+import type { NextFunction, Request, Response } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { prisma } from '../lib/prisma.js';
+import { configureKeycloakTls } from '../lib/keycloakTls.js';
+import { getKeycloakFrontendUrl, getKeycloakUrl } from '../lib/keycloakConfig.js';
 
 export type AppRole = 'Секретарь' | 'Преподаватель' | 'Эксперт' | 'Внешний эксперт';
 
@@ -39,23 +42,30 @@ declare global {
 }
 
 function getIssuer(): string {
-  const keycloakUrl = process.env.KEYCLOAK_URL || 'http://127.0.0.1:8080';
+  const keycloakUrl = getKeycloakUrl();
   const realm = process.env.KEYCLOAK_REALM || 'app';
   return `${keycloakUrl.replace(/\/+$/, '')}/realms/${realm}`;
 }
 
 function getValidIssuers(): string[] {
   const realm = process.env.KEYCLOAK_REALM || 'app';
-  const frontendUrl = process.env.KEYCLOAK_FRONTEND_URL;
-  const issuers = [
-    getIssuer(),
-    `http://127.0.0.1:8080/realms/${realm}`,
-    `https://127.0.0.1:8080/realms/${realm}`
-  ];
-  if (frontendUrl) {
-    issuers.push(`${frontendUrl.replace(/\/+$/, '')}/realms/${realm}`);
+  const frontendUrl = getKeycloakFrontendUrl().replace(/\/+$/, '');
+  const rawAliases = process.env.KEYCLOAK_ISSUER_ALIASES || '';
+  const aliases = rawAliases
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => value.replace(/\/+$/, ''));
+
+  const issuers = [getIssuer()];
+
+  issuers.push(`${frontendUrl}/realms/${realm}`);
+
+  for (const alias of aliases) {
+    issuers.push(`${alias}/realms/${realm}`);
   }
-  return issuers;
+
+  return Array.from(new Set(issuers));
 }
 
 function mapRole(roles: string[]): AppRole {
@@ -64,6 +74,8 @@ function mapRole(roles: string[]): AppRole {
   if (roles.includes('expert')) return 'Эксперт';
   return 'Преподаватель';
 }
+
+configureKeycloakTls();
 
 const jwks = createRemoteJWKSet(new URL(`${getIssuer()}/protocol/openid-connect/certs`));
 
