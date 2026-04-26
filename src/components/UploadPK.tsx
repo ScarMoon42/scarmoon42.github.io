@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { ArrowLeft, Upload, X, CheckCircle, AlertCircle, Download } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle, AlertCircle, Download, Loader2, Trash2, RefreshCw } from "lucide-react";
 import { TeacherNavigation } from "./TeacherNavigation";
-import { uploadFiles, getFiles, downloadFile } from "../services/files";
+import { uploadFiles, getFiles, downloadFile, deleteFile } from "../services/files";
 import { FileItem } from "../services/files";
 
 interface UploadPKProps {
@@ -15,11 +15,15 @@ export function UploadPK({ onBack, onLogout }: UploadPKProps) {
   const [pkFiles, setPkFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [replacingId, setReplacingId] = useState<number | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<FileItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const pkFileInputRef = useRef<HTMLInputElement>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+  const [replaceTargetId, setReplaceTargetId] = useState<number | null>(null);
 
   // Загрузить список файлов при монтировании
   const loadFiles = async () => {
@@ -93,6 +97,53 @@ export function UploadPK({ onBack, onLogout }: UploadPKProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteUploadedFile = async (fileId: number) => {
+    const confirmed = window.confirm("Удалить файл?");
+    if (!confirmed) return;
+    setDeletingId(fileId);
+    const res = await deleteFile(fileId);
+    setDeletingId(null);
+    if (!res.success) {
+      alert(res.error ?? "Ошибка удаления");
+      return;
+    }
+    await loadFiles();
+  };
+
+  const openReplaceDialog = (fileId: number) => {
+    setReplaceTargetId(fileId);
+    replaceFileInputRef.current?.click();
+  };
+
+  const handleReplaceFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected || replaceTargetId == null) return;
+
+    setReplacingId(replaceTargetId);
+    const uploadRes = await uploadFiles("pk", [selected]);
+    if (!uploadRes.success) {
+      setReplacingId(null);
+      alert(uploadRes.error ?? "Ошибка при замене файла");
+      e.target.value = "";
+      setReplaceTargetId(null);
+      return;
+    }
+
+    const deleteRes = await deleteFile(replaceTargetId);
+    setReplacingId(null);
+    e.target.value = "";
+    setReplaceTargetId(null);
+
+    if (!deleteRes.success) {
+      alert(deleteRes.error ?? "Новый файл загружен, но старый удалить не удалось");
+      await loadFiles();
+      return;
+    }
+
+    await loadFiles();
+    alert("Файл успешно заменен");
   };
 
   return (
@@ -191,47 +242,89 @@ export function UploadPK({ onBack, onLogout }: UploadPKProps) {
               <CardContent>
                 <div className="space-y-2">
                   {uploadedFiles.map((file) => (
-                    <div
-                      key={file.id}
-                      className="flex items-center justify-between bg-gray-50 p-3 rounded border border-gray-200"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {file.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {file.type} • {new Date(file.uploadedAt).toLocaleString()}
-                        </p>
+                    <div key={file.id} className="bg-gray-50 rounded-xl border-2 border-gray-100 overflow-hidden">
+                      <div className="flex items-center justify-between p-4 bg-white border-b border-gray-100">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {file.type} • {new Date(file.uploadedAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs px-2 py-1 rounded ${
+                              file.status === "uploaded"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
+                          >
+                            {file.status === "uploaded" ? "Загружен" : file.status}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8"
+                            onClick={async () => {
+                              setDownloadingId(file.id);
+                              try {
+                                await downloadFile(file.id, file.name);
+                              } catch (e) {
+                                alert(e instanceof Error ? e.message : "Ошибка");
+                              } finally {
+                                setDownloadingId(null);
+                              }
+                            }}
+                            disabled={downloadingId === file.id}
+                          >
+                            {downloadingId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => openReplaceDialog(file.id)}
+                            disabled={replacingId === file.id}
+                          >
+                            {replacingId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-red-500 hover:text-red-700"
+                            onClick={() => handleDeleteUploadedFile(file.id)}
+                            disabled={deletingId === file.id}
+                          >
+                            {deletingId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            file.status === "uploaded"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {file.status === "uploaded" ? "Загружен" : file.status}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8"
-                          onClick={async () => {
-                            setDownloadingId(file.id);
-                            try {
-                              await downloadFile(file.id, file.name);
-                            } catch (e) {
-                              alert(e instanceof Error ? e.message : "Ошибка");
-                            } finally {
-                              setDownloadingId(null);
-                            }
-                          }}
-                          disabled={downloadingId === file.id}
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {file.expertComment && (
+                        <div className="p-4 bg-purple-50 flex gap-3 border-t border-purple-100">
+                          <CheckCircle className="h-5 w-5 text-purple-600 flex-shrink-0" />
+                          <div>
+                            <p className="text-xs font-semibold text-purple-900 uppercase tracking-wider mb-1">
+                              Комментарий эксперта:
+                            </p>
+                            <p className="text-sm text-purple-800 leading-relaxed">
+                              {file.expertComment}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -248,6 +341,13 @@ export function UploadPK({ onBack, onLogout }: UploadPKProps) {
             </Button>
           </div>
         </div>
+        <input
+          ref={replaceFileInputRef}
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+          onChange={handleReplaceFileSelect}
+          className="hidden"
+        />
       </main>
     </div>
   );

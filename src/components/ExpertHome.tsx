@@ -1,7 +1,9 @@
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
-import { UserCircle, Users } from "lucide-react";
+import { Loader2, UserCircle, Users } from "lucide-react";
+import { useEffect, useState } from "react";
 import { TeacherNavigation } from "./TeacherNavigation";
+import * as api from "../services/api";
 
 interface Candidate {
   id: string;
@@ -19,6 +21,48 @@ interface ExpertHomeProps {
 }
 
 export function ExpertHome({ candidate, onNavigate, onBackToCandidates, onLogout }: ExpertHomeProps) {
+  const [lessonInfo, setLessonInfo] = useState<{ date: string; time: string; room: string } | null>(null);
+  const [lessonLoading, setLessonLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadAssignedLesson() {
+      setLessonLoading(true);
+      const classesRes = await api.get<{
+        data?: Array<{ teacherId: number; teacher: string; date: string; time: string; room: string }>;
+      }>(
+        "/open-classes/expert/my-classes"
+      );
+
+      if (!classesRes.success) {
+        setLessonInfo(null);
+        setLessonLoading(false);
+        return;
+      }
+
+      const classes = (
+        classesRes.data as {
+          data?: Array<{ teacherId: number; teacher: string; date: string; time: string; room: string }>;
+        } | undefined
+      )?.data ?? [];
+      const targetClass = candidate
+        ? classes.find((item) => String(item.teacherId) === candidate.id)
+        : classes[0];
+
+      setLessonInfo(
+        targetClass
+          ? {
+              date: targetClass.date ?? "—",
+              time: targetClass.time ?? "—",
+              room: targetClass.room ?? "—",
+            }
+          : null
+      );
+      setLessonLoading(false);
+    }
+
+    loadAssignedLesson();
+  }, [candidate]);
+
   return (
     <div className="min-h-screen bg-white">
       <TeacherNavigation showLogout onLogout={onLogout} />
@@ -37,9 +81,20 @@ export function ExpertHome({ candidate, onNavigate, onBackToCandidates, onLogout
 
           <div className="text-right">
             <h2 className="text-xl mb-2">Информация о проведении открытого занятия:</h2>
-            <p className="text-gray-700">_______________(дата)</p>
-            <p className="text-gray-700">______________(время)</p>
-            <p className="text-gray-700">__________(аудитория)</p>
+            {lessonLoading ? (
+              <div className="flex items-center justify-end gap-2 text-gray-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Загрузка...</span>
+              </div>
+            ) : lessonInfo ? (
+              <>
+                <p className="text-gray-700">{lessonInfo.date} (дата)</p>
+                <p className="text-gray-700">{lessonInfo.time} (время)</p>
+                <p className="text-gray-700">{lessonInfo.room} (аудитория)</p>
+              </>
+            ) : (
+              <p className="text-gray-500">Назначенное занятие пока отсутствует</p>
+            )}
           </div>
         </div>
 
@@ -76,13 +131,14 @@ export function ExpertHome({ candidate, onNavigate, onBackToCandidates, onLogout
             Приветствуем Вас, Уважаемый эксперт!
           </p>
           <p className="text-lg mb-4">
-            Просим Вас ознакомиться с учебно-методическим комплексом (УМК) и курсовыми проектами (КП),
+            Просим Вас ознакомиться с учебно-методическим комплексом (УМК), курсовыми проектами (КП)
+            и документами о повышении квалификации (ПК),
           </p>
           <p className="text-lg mb-4">
             предоставленными претендентом на должность профессорско преподавательского состава (ППС).
           </p>
           <p className="text-lg mb-4">
-            После изучения документов, просим Вас их оценить прямо в разделе "УМК, КП" (статус и комментарий), а также заполнить "Анкету работодателя".
+            После изучения документов, просим Вас их оценить прямо в разделе "УМК, КП, ПК" (статус и комментарий), а также заполнить "Анкету работодателя".
           </p>
           <p className="text-lg mb-6">
             Во время открытого занятия необходимо будет заполнить чек-лист по открытому занятию.
@@ -148,7 +204,7 @@ export function ExpertHome({ candidate, onNavigate, onBackToCandidates, onLogout
                 </svg>
               </div>
               <p className="text-center">
-                УМК, КП
+                УМК, КП, ПК
               </p>
             </CardContent>
           </Card>

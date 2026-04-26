@@ -31,10 +31,12 @@ export function ExpertOpenLesson({ candidate, onBack, onLogout }: ExpertOpenLess
       setLoading(true);
 
       // 1. Получаем список открытых занятий эксперта
-      const classesRes = await api.get('/open-classes/expert/my-classes');
-      if (classesRes.success && Array.isArray((classesRes.data as any).data)) {
-        const classes = (classesRes.data as any).data;
-        const myClass = classes.find((c: any) => candidate && c.teacher === candidate.name);
+      const classesRes = await api.get<{
+        data?: Array<{ id: number; teacherId: number }>;
+      }>('/open-classes/expert/my-classes');
+      if (classesRes.success && Array.isArray((classesRes.data as { data?: Array<{ id: number; teacherId: number }> } | undefined)?.data)) {
+        const classes = ((classesRes.data as { data?: Array<{ id: number; teacherId: number }> }).data ?? []);
+        const myClass = classes.find((c) => candidate && String(c.teacherId) === candidate.id);
         if (myClass) {
           setOpenClassId(myClass.id);
         } else {

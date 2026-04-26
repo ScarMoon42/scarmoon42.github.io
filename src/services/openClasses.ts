@@ -91,6 +91,18 @@ export async function createOpenClass(data: {
   return { success: true as const, id };
 }
 
+/** Удалить открытое занятие (секретарь) */
+export async function deleteOpenClass(id: number) {
+  const res = await api.del<{ success?: boolean; message?: string }>(`${API_PREFIX}/open-classes/${id}`);
+  if (!res.success) {
+    return {
+      success: false as const,
+      error: (res as { error?: string }).error ?? 'Ошибка удаления',
+    };
+  }
+  return { success: true as const };
+}
+
 /** Отправить оценку студента */
 export async function submitStudentResult(lessonId: number, result: Record<string, string>, ssid: string) {
   const res = await api.post<{ success?: boolean; message?: string }>(

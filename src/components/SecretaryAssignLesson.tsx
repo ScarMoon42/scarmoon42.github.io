@@ -12,9 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import { ArrowLeft, QrCode, BarChart3 } from "lucide-react";
+import { ArrowLeft, QrCode, BarChart3, Trash2 } from "lucide-react";
 import { fetchUsers } from "../services/users";
-import { fetchAllOpenClasses, createOpenClass } from "../services/openClasses";
+import { fetchAllOpenClasses, createOpenClass, deleteOpenClass } from "../services/openClasses";
 import { StudentSurveyResults } from "./StudentSurveyResults";
 
 interface Teacher {
@@ -48,6 +48,7 @@ export function SecretaryAssignLesson({ onBack, onLogout }: SecretaryAssignLesso
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingLessonId, setDeletingLessonId] = useState<number | null>(null);
   const [viewingResults, setViewingResults] = useState<{ id: number; date: string; teacher: string } | null>(null);
 
   useEffect(() => {
@@ -149,6 +150,26 @@ export function SecretaryAssignLesson({ onBack, onLogout }: SecretaryAssignLesso
   const handleShowQrCode = (qrLink: string) => {
     setCurrentQrCode(qrLink);
     setQrDialogOpen(true);
+  };
+
+  const handleDeleteLesson = async (lessonId: number) => {
+    const confirmed = window.confirm("Удалить это открытое занятие? Действие необратимо.");
+    if (!confirmed) return;
+
+    setDeletingLessonId(lessonId);
+    const res = await deleteOpenClass(lessonId);
+    setDeletingLessonId(null);
+
+    if (!res.success) {
+      alert(res.error ?? "Не удалось удалить занятие");
+      return;
+    }
+
+    setLessons((prev) => prev.filter((lesson) => lesson.id !== lessonId));
+    if (viewingResults?.id === lessonId) {
+      setViewingResults(null);
+    }
+    alert("Открытое занятие удалено");
   };
 
   return (
@@ -329,7 +350,7 @@ export function SecretaryAssignLesson({ onBack, onLogout }: SecretaryAssignLesso
                             ))}
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                           <Button
                             variant="outline"
                             className="w-full gap-2"
@@ -345,6 +366,15 @@ export function SecretaryAssignLesson({ onBack, onLogout }: SecretaryAssignLesso
                           >
                             <BarChart3 className="h-4 w-4" />
                             Результаты
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="w-full gap-2 border-red-200 text-red-700 hover:bg-red-50"
+                            onClick={() => handleDeleteLesson(lesson.id)}
+                            disabled={deletingLessonId === lesson.id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {deletingLessonId === lesson.id ? "Удаление..." : "Удалить"}
                           </Button>
                         </div>
                       </div>

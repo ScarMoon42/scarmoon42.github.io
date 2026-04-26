@@ -140,6 +140,38 @@ router.get('/all', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+/** DELETE /open-classes/:id — удалить открытое занятие (секретарь) */
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const authUser = req.authUser as { role: string };
+    if (authUser.role !== 'Секретарь') {
+      return res.status(403).json({ success: false, message: 'Доступ только для секретаря' });
+    }
+
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ success: false, message: 'Некорректный id' });
+    }
+
+    const existing = await prisma.openClass.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Занятие не найдено' });
+    }
+
+    await prisma.openClass.delete({
+      where: { id },
+    });
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('Open class delete error', e);
+    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
 /** POST /open-classes/:id/student-result — отправить оценку студента (анонимно с SSID) */
 router.post('/:id/student-result', async (req: Request, res: Response) => {
   try {
@@ -248,6 +280,7 @@ router.get('/expert/my-classes', requireAuth, async (req: Request, res: Response
       date: formatDate(ce.openClass.date),
       time: ce.openClass.time ?? '—',
       room: ce.openClass.room ?? '—',
+      teacherId: ce.openClass.teacherId,
       teacher: ce.openClass.teacher.fullName,
       expertAssignmentId: ce.id,
     }));

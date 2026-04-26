@@ -129,7 +129,7 @@ services:
       - KEYCLOAK_FRONTEND_URL=${KEYCLOAK_FRONTEND_URL:-http://127.0.0.1:8080/auth} # Замените на публичный URL Keycloak при деплое (например, https://auth.domain.com/auth)
       - KEYCLOAK_REALM=app
       - KEYCLOAK_CLIENT_ID=frontend
-      - KEYCLOAK_TLS_INSECURE=false
+      - KEYCLOAK_TLS_INSECURE=true
       - VITE_KEYCLOAK_SILENT_CHECK_SSO=false
       - NODE_ENV=production
       - CORS_ORIGIN=http://127.0.0.1:3000,http://127.0.0.1:3000

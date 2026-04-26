@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { ArrowLeft, Upload, X, CheckCircle, AlertCircle, Download, FileText, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, X, CheckCircle, AlertCircle, Download, FileText, Loader2, Trash2, RefreshCw } from "lucide-react";
 import { TeacherNavigation } from "./TeacherNavigation";
-import { uploadFiles, getFiles, downloadFile } from "../services/files";
+import { uploadFiles, getFiles, downloadFile, deleteFile } from "../services/files";
 import { FileItem } from "../services/files";
 
 interface UploadUMKProps {
@@ -16,17 +16,26 @@ export function UploadUMK({ onBack, onLogout }: UploadUMKProps) {
   const [pkFiles, setPkFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [replacingId, setReplacingId] = useState<number | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<FileItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const umkFileInputRef = useRef<HTMLInputElement>(null);
   const pkFileInputRef = useRef<HTMLInputElement>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+  const [replaceTarget, setReplaceTarget] = useState<{ fileId: number; fileType: "umk" | "kp" } | null>(null);
 
   const loadFiles = async () => {
     const result = await getFiles();
     if (result.success) {
-      setUploadedFiles(result.files);
+      setUploadedFiles(
+        result.files.filter((f) => {
+          const type = (f.type || "").toLowerCase();
+          return type.includes("умк") || type.includes("кп") || type === "kp";
+        })
+      );
     }
   };
 
@@ -113,9 +122,9 @@ export function UploadUMK({ onBack, onLogout }: UploadUMKProps) {
         }
       }
 
-      // Загружаем ПК файлы
+      // Загружаем КП файлы
       if (pkFiles.length > 0) {
-        const pkResult = await uploadFiles("pk", pkFiles);
+        const pkResult = await uploadFiles("kp", pkFiles);
         if (!pkResult.success) {
           setError(pkResult.error);
           setLoading(false);
@@ -137,6 +146,55 @@ export function UploadUMK({ onBack, onLogout }: UploadUMKProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteUploadedFile = async (fileId: number) => {
+    const confirmed = window.confirm("Удалить файл?");
+    if (!confirmed) return;
+    setDeletingId(fileId);
+    const res = await deleteFile(fileId);
+    setDeletingId(null);
+    if (!res.success) {
+      alert(res.error ?? "Ошибка удаления");
+      return;
+    }
+    await loadFiles();
+  };
+
+  const openReplaceDialog = (file: FileItem) => {
+    const type = (file.type || "").toLowerCase();
+    const fileType: "umk" | "kp" = type.includes("умк") ? "umk" : "kp";
+    setReplaceTarget({ fileId: file.id, fileType });
+    replaceFileInputRef.current?.click();
+  };
+
+  const handleReplaceFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected || !replaceTarget) return;
+
+    setReplacingId(replaceTarget.fileId);
+    const uploadRes = await uploadFiles(replaceTarget.fileType, [selected]);
+    if (!uploadRes.success) {
+      setReplacingId(null);
+      alert(uploadRes.error ?? "Ошибка при замене файла");
+      e.target.value = "";
+      setReplaceTarget(null);
+      return;
+    }
+
+    const deleteRes = await deleteFile(replaceTarget.fileId);
+    setReplacingId(null);
+    e.target.value = "";
+    setReplaceTarget(null);
+
+    if (!deleteRes.success) {
+      alert(deleteRes.error ?? "Новый файл загружен, но старый удалить не удалось");
+      await loadFiles();
+      return;
+    }
+
+    await loadFiles();
+    alert("Файл успешно заменен");
   };
 
   return (
@@ -330,6 +388,32 @@ export function UploadUMK({ onBack, onLogout }: UploadUMKProps) {
                               <Download className="h-4 w-4 text-gray-400" />
                             )}
                           </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={() => openReplaceDialog(file)}
+                            disabled={replacingId === file.id}
+                          >
+                            {replacingId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4 text-gray-400" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                            onClick={() => handleDeleteUploadedFile(file.id)}
+                            disabled={deletingId === file.id}
+                          >
+                            {deletingId === file.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
                         </div>
                       </div>
 
@@ -365,6 +449,13 @@ export function UploadUMK({ onBack, onLogout }: UploadUMKProps) {
             </Button>
           </div>
         </div>
+        <input
+          ref={replaceFileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png"
+          onChange={handleReplaceFileSelect}
+          className="hidden"
+        />
       </main>
     </div>
   );

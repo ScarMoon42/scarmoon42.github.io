@@ -60,11 +60,20 @@ router.post('/upload', requireAuth, async (req: Request, res: Response) => {
 
         fs.writeFileSync(filepath, buf);
 
+        const fileLabel =
+          body.fileType === 'umk'
+            ? 'УМК'
+            : body.fileType === 'kp'
+              ? 'КП'
+              : body.fileType === 'pk'
+                ? 'ПК (повышение квалификации)'
+                : body.fileType;
+
         const dbFile = await prisma.file.create({
           data: {
             name: file.name,
             path: `/uploads/${filename}`,
-            comment: body.fileType === 'umk' ? 'УМК' : body.fileType === 'pk' ? 'ПК (повышение квалификации)' : body.fileType,
+            comment: fileLabel,
             status: 'uploaded',
             userId,
           },

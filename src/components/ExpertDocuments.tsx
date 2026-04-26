@@ -148,7 +148,7 @@ export function ExpertDocuments({ candidate, onBack, onLogout }: ExpertDocuments
             </div>
           )}
 
-          <h2 className="text-2xl mb-8 font-semibold">Оценка документов УМК, КП</h2>
+          <h2 className="text-2xl mb-8 font-semibold">Оценка документов УМК, КП, ПК</h2>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center p-24 bg-gray-50 rounded-xl border-2 border-dashed">
@@ -251,7 +251,7 @@ export function ExpertDocuments({ candidate, onBack, onLogout }: ExpertDocuments
             <div className="flex gap-4">
               <CheckCircle2 className="h-6 w-6 text-purple-600 flex-shrink-0" />
               <p className="text-sm text-purple-800 leading-relaxed">
-                Документы предоставлены кандидатом для оценки. Ваши комментарии и статусы будут видны
+                Документы УМК, КП и ПК предоставлены кандидатом для оценки. Ваши комментарии и статусы будут видны
                 преподавателю в режиме реального времени. После ознакомления с материалами,
                 пожалуйста, также заполните анкету работодателя.
               </p>
