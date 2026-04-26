@@ -126,3 +126,15 @@ export async function fetchStudentResults(lessonId: number) {
   const body = res.data as { data?: any[] } | undefined;
   return { success: true as const, data: body?.data || [] };
 }
+
+/** Получить агрегированные результаты занятия (для секретаря) */
+export async function fetchLessonResultsSummary(lessonId: number) {
+  const res = await api.get<{ success?: boolean; data?: any }>(
+    `${API_PREFIX}/open-classes/${lessonId}/results-summary`
+  );
+  if (!res.success) {
+    return { success: false as const, error: (res as { error?: string }).error || 'Ошибка загрузки' };
+  }
+  const body = res.data as { data?: any } | undefined;
+  return { success: true as const, data: body?.data };
+}

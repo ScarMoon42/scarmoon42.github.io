@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { fetchStudentResults } from "../services/openClasses";
+import { fetchLessonResultsSummary } from "../services/openClasses";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -14,14 +14,14 @@ interface ResultsProps {
 }
 
 export function StudentSurveyResults({ lessonId, onBack, lessonInfo }: ResultsProps) {
-    const [results, setResults] = useState<any[]>([]);
+    const [summary, setSummary] = useState<any | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        fetchStudentResults(lessonId).then((res) => {
+        fetchLessonResultsSummary(lessonId).then((res) => {
             if (res.success) {
-                setResults(res.data || []);
+                setSummary(res.data || null);
             } else {
                 setError(res.error || "Ошибка загрузки");
             }
@@ -38,19 +38,10 @@ export function StudentSurveyResults({ lessonId, onBack, lessonInfo }: ResultsPr
         );
     }
 
-    const questions = [
-        { id: "goalsCommunication", text: "Доведение целей и задач" },
-        { id: "engagement", text: "Вовлечение участников" },
-        { id: "questions", text: "Ответы на вопросы" },
-        { id: "conclusion", text: "Подведение итогов" },
-        { id: "evaluation", text: "Оценка результатов" },
-    ];
-
-    const calculateAverage = (qId: string) => {
-        if (!results.length) return 0;
-        const sum = results.reduce((acc, r) => acc + (parseInt(r.result[qId], 10) || 0), 0);
-        return (sum / results.length).toFixed(1);
-    };
+    const teacherTest = summary?.teacherTest?.summary;
+    const students = summary?.students;
+    const expertsOpenLesson = summary?.expertsOpenLesson;
+    const expertsFileEval = summary?.expertsFileEval;
 
     return (
         <div className="space-y-6">
@@ -72,47 +63,177 @@ export function StudentSurveyResults({ lessonId, onBack, lessonInfo }: ResultsPr
                 <Card className="border-2 border-purple-100">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm font-medium text-gray-500 uppercase tracking-wider">
-                            Всего ответов
+                            Ответов студентов
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold text-purple-600">{results.length}</div>
+                        <div className="text-3xl font-bold text-purple-600">{students?.totalResponses ?? 0}</div>
+                    </CardContent>
+                </Card>
+                <Card className="border-2 border-purple-100">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+                            Эксперты: открытое занятие
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-purple-600">{expertsOpenLesson?.totalResponses ?? 0}</div>
+                    </CardContent>
+                </Card>
+                <Card className="border-2 border-purple-100">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+                            Эксперты: оценка файлов
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-3xl font-bold text-purple-600">{expertsFileEval?.totalResponses ?? 0}</div>
                     </CardContent>
                 </Card>
             </div>
 
             <Card className="border-2">
                 <CardHeader>
-                    <CardTitle>Средние баллы по критериям</CardTitle>
+                    <CardTitle>Тест преподавателя (правильность ответов)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-6">
-                        {questions.map((q) => {
-                            const avg = Number(calculateAverage(q.id));
-                            const percentage = (avg / 3) * 100;
-                            return (
-                                <div key={q.id} className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="font-medium">{q.text}</span>
-                                        <span className="text-purple-600 font-bold">{avg} / 3</span>
+                    {!summary?.teacherTest?.hasSubmission ? (
+                        <p className="text-gray-500">Преподаватель пока не прошел тест.</p>
+                    ) : teacherTest ? (
+                        <div className="space-y-4">
+                            {summary?.teacherTest?.testName && (
+                                <p className="text-sm text-gray-600">
+                                    Версия теста: {summary.teacherTest.testName}
+                                </p>
+                            )}
+                            <p className="font-medium">
+                                Правильных ответов: {teacherTest.correctAnswers} из {teacherTest.totalQuestions}
+                            </p>
+                            <div className="space-y-3">
+                                {teacherTest.questions.map((q: any) => (
+                                    <div key={q.questionIndex} className="rounded border p-3">
+                                        <p className="font-medium mb-2">{q.questionText}</p>
+                                        <p className="text-sm">Ответ преподавателя: <span className="font-semibold">{q.selectedAnswer || "—"}</span></p>
+                                        <p className="text-sm">Правильный ответ: <span className="font-semibold">{(q.correctAnswers || []).join(", ") || "—"}</span></p>
+                                        <p className={`text-sm mt-1 ${q.isCorrect ? "text-green-700" : "text-red-700"}`}>
+                                            {q.isCorrect ? "Верно" : "Неверно"}
+                                        </p>
                                     </div>
-                                    <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
-                                            style={{ width: `${percentage}%` }}
-                                        />
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-gray-500">Данные теста недоступны.</p>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="border-2">
+                <CardHeader>
+                    <CardTitle>Распределение ответов студентов</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {!students?.forms?.length ? (
+                        <p className="text-gray-500">Нет данных по ответам студентов.</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {students.forms.map((form: any) => (
+                                <div key={form.formId} className="rounded border p-3 space-y-3">
+                                    <div>
+                                        <p className="font-medium">{form.formName || `Форма #${form.formId}`}</p>
+                                        <p className="text-sm text-gray-600">Ответов по версии: {form.totalResponses}</p>
                                     </div>
+                                    {form.questions.map((q: any) => (
+                                        <div key={`${form.formId}-${q.questionIndex}`} className="rounded border p-3">
+                                            <p className="font-medium mb-2">{q.questionText}</p>
+                                            <div className="space-y-1">
+                                                {q.answers.map((a: any, idx: number) => (
+                                                    <p key={idx} className="text-sm">
+                                                        {a.answer}: <span className="font-semibold">{a.count}</span>
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            );
-                        })}
-                    </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="border-2">
+                <CardHeader>
+                    <CardTitle>Распределение ответов экспертов (открытое занятие)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {!expertsOpenLesson?.forms?.length ? (
+                        <p className="text-gray-500">Нет данных по экспертам для открытого занятия.</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {expertsOpenLesson.forms.map((form: any) => (
+                                <div key={form.formId} className="rounded border p-3 space-y-3">
+                                    <div>
+                                        <p className="font-medium">{form.formName || `Форма #${form.formId}`}</p>
+                                        <p className="text-sm text-gray-600">Ответов по версии: {form.totalResponses}</p>
+                                    </div>
+                                    {form.questions.map((q: any) => (
+                                        <div key={`${form.formId}-${q.questionIndex}`} className="rounded border p-3">
+                                            <p className="font-medium mb-2">{q.questionText}</p>
+                                            <div className="space-y-1">
+                                                {q.answers.map((a: any, idx: number) => (
+                                                    <p key={idx} className="text-sm">
+                                                        {a.answer}: <span className="font-semibold">{a.count}</span>
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            <Card className="border-2">
+                <CardHeader>
+                    <CardTitle>Распределение ответов экспертов (оценка файлов)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {!expertsFileEval?.forms?.length ? (
+                        <p className="text-gray-500">Нет данных по экспертной оценке файлов.</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {expertsFileEval.forms.map((form: any) => (
+                                <div key={form.formId} className="rounded border p-3 space-y-3">
+                                    <div>
+                                        <p className="font-medium">{form.formName || `Форма #${form.formId}`}</p>
+                                        <p className="text-sm text-gray-600">Ответов по версии: {form.totalResponses}</p>
+                                    </div>
+                                    {form.questions.map((q: any) => (
+                                        <div key={`${form.formId}-${q.questionIndex}`} className="rounded border p-3">
+                                            <p className="font-medium mb-2">{q.questionText}</p>
+                                            <div className="space-y-1">
+                                                {q.answers.map((a: any, idx: number) => (
+                                                    <p key={idx} className="text-sm">
+                                                        {a.answer}: <span className="font-semibold">{a.count}</span>
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
             {error && <p className="text-red-500 text-center">{error}</p>}
 
-            {results.length === 0 && !error && (
-                <p className="text-gray-500 text-center py-8">Пока нет ни одного ответа студентов.</p>
+            {!summary && !loading && !error && (
+                <p className="text-gray-500 text-center py-8">Данные по результатам пока отсутствуют.</p>
             )}
         </div>
     );

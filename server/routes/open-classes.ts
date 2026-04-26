@@ -10,6 +10,129 @@ function formatDate(d: Date): string {
   return d.toISOString().slice(0, 10).split('-').reverse().join('.');
 }
 
+type GiftQuestion = {
+  text?: string;
+  title?: string;
+  options?: Array<{ text?: string; isCorrect?: boolean }>;
+  correctAnswers?: string[];
+};
+
+type ParsedGiftData = {
+  questions?: GiftQuestion[];
+};
+
+function parseJsonObject(value: string | null | undefined): Record<string, unknown> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeAnswer(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function getQuestionLabel(question: GiftQuestion, index: number): string {
+  return question.title || question.text || `Вопрос ${index + 1}`;
+}
+
+function aggregateChoiceAnswers(
+  parsedData: ParsedGiftData | null,
+  rawResults: Array<{ result: string }>
+) {
+  const questions = parsedData?.questions ?? [];
+  const answerMaps = rawResults.map((entry) => parseJsonObject(entry.result));
+
+  return questions.map((question, idx) => {
+    const questionKey = String(idx);
+    const counts: Record<string, number> = {};
+
+    answerMaps.forEach((answerMap) => {
+      const answer = normalizeAnswer(answerMap[questionKey]);
+      if (!answer) return;
+      counts[answer] = (counts[answer] ?? 0) + 1;
+    });
+
+    const options = (question.options ?? []).map((opt) => ({
+      answer: normalizeAnswer(opt.text),
+      count: counts[normalizeAnswer(opt.text)] ?? 0,
+      isCorrect: Boolean(opt.isCorrect),
+    }));
+
+    const unknownAnswers = Object.entries(counts)
+      .filter(([answer]) => !options.some((opt) => opt.answer === answer))
+      .map(([answer, count]) => ({ answer, count, isCorrect: false }));
+
+    return {
+      questionIndex: idx,
+      questionText: getQuestionLabel(question, idx),
+      answers: [...options, ...unknownAnswers].filter((item) => item.answer !== ''),
+    };
+  });
+}
+
+function aggregateByFormVersion(
+  items: Array<{ result: string; formId: number; form: { name: string | null; createdAt: Date; parsedData: string | null } | null }>
+) {
+  const groups = new Map<number, Array<{ result: string; formId: number; form: { name: string | null; createdAt: Date; parsedData: string | null } | null }>>();
+  items.forEach((item) => {
+    const current = groups.get(item.formId) ?? [];
+    current.push(item);
+    groups.set(item.formId, current);
+  });
+
+  return Array.from(groups.entries()).map(([formId, group]) => {
+    const formMeta = group[0]?.form;
+    const parsed = formMeta?.parsedData ? (JSON.parse(formMeta.parsedData) as ParsedGiftData) : null;
+    return {
+      formId,
+      formName: formMeta?.name ?? `Форма #${formId}`,
+      formCreatedAt: formMeta?.createdAt?.toISOString?.() ?? null,
+      totalResponses: group.length,
+      questions: aggregateChoiceAnswers(parsed, group.map((item) => ({ result: item.result }))),
+    };
+  });
+}
+
+function buildTeacherTestDetails(
+  parsedData: ParsedGiftData | null,
+  teacherResult: { result: string } | null
+) {
+  if (!parsedData || !teacherResult) return null;
+
+  const questions = parsedData.questions ?? [];
+  const resultMap = parseJsonObject(teacherResult.result);
+  let correctCount = 0;
+
+  const questionsDetails = questions.map((question, idx) => {
+    const questionKey = String(idx);
+    const selectedAnswer = normalizeAnswer(resultMap[questionKey]);
+    const correctAnswers = (question.correctAnswers ?? []).map((answer) => normalizeAnswer(answer));
+    const isCorrect = selectedAnswer !== '' && correctAnswers.includes(selectedAnswer);
+    if (isCorrect) correctCount += 1;
+
+    return {
+      questionIndex: idx,
+      questionText: getQuestionLabel(question, idx),
+      selectedAnswer,
+      correctAnswers,
+      isCorrect,
+    };
+  });
+
+  return {
+    totalQuestions: questions.length,
+    correctAnswers: correctCount,
+    questions: questionsDetails,
+  };
+}
+
 async function attachDbUser(req: Request, res: Response, next: () => void) {
   const user = await prisma.user.findFirst({ where: { externalId: req.auth!.sub } });
   if (!user) return res.status(401).json({ success: false, message: 'Профиль не найден' });
@@ -253,6 +376,121 @@ router.get('/:id/student-results', requireAuth, async (req: Request, res: Respon
     return res.json({ success: true, data: parsedResults });
   } catch (e) {
     console.error('Fetch student results error', e);
+    return res.status(500).json({ success: false, message: 'Ошибка сервера' });
+  }
+});
+
+/** GET /open-classes/:id/results-summary — агрегированные результаты (секретарь) */
+router.get('/:id/results-summary', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const authUser = req.authUser as { role: string };
+    if (authUser.role !== 'Секретарь') {
+      return res.status(403).json({ success: false, message: 'Доступ только для секретаря' });
+    }
+
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ success: false, message: 'Некорректный id' });
+    }
+
+    const openClass = await prisma.openClass.findUnique({
+      where: { id },
+      include: {
+        teacher: { select: { id: true, fullName: true } },
+      },
+    });
+    if (!openClass) {
+      return res.status(404).json({ success: false, message: 'Занятие не найдено' });
+    }
+
+    const [studentResults, expertOpenLessonResults, expertFileEvalResults, teacherTestResult] = await Promise.all([
+      prisma.resultOpenClassStudent.findMany({
+        where: { openClassId: id },
+        select: {
+          result: true,
+          formId: true,
+          form: {
+            select: { name: true, createdAt: true, parsedData: true },
+          },
+        },
+      }),
+      prisma.resultOpenClassExpert.findMany({
+        where: { openClassId: id },
+        select: {
+          result: true,
+          formId: true,
+          form: {
+            select: { name: true, createdAt: true, parsedData: true },
+          },
+        },
+      }),
+      prisma.resultFiles.findMany({
+        where: {
+          teacherId: openClass.teacher.id,
+          form: { formType: 'expert_file_eval' },
+        },
+        select: {
+          result: true,
+          formId: true,
+          form: {
+            select: { name: true, createdAt: true, parsedData: true },
+          },
+        },
+      }),
+      prisma.resultTestTeacher.findFirst({
+        where: { teacherId: openClass.teacher.id, test: { formType: 'teacher_test' } },
+        orderBy: { id: 'desc' },
+        select: {
+          result: true,
+          testId: true,
+          test: {
+            select: { id: true, name: true, createdAt: true, parsedData: true },
+          },
+        },
+      }),
+    ]);
+    const teacherTestParsed = teacherTestResult?.test?.parsedData
+      ? (JSON.parse(teacherTestResult.test.parsedData) as ParsedGiftData)
+      : null;
+    const teacherTestSummary = buildTeacherTestDetails(teacherTestParsed, teacherTestResult);
+    const studentSummariesByForm = aggregateByFormVersion(studentResults);
+    const expertOpenLessonSummariesByForm = aggregateByFormVersion(expertOpenLessonResults);
+    const expertFileEvalSummariesByForm = aggregateByFormVersion(expertFileEvalResults);
+
+    return res.json({
+      success: true,
+      data: {
+        lesson: {
+          id: openClass.id,
+          teacherId: openClass.teacher.id,
+          teacherName: openClass.teacher.fullName,
+          date: formatDate(openClass.date),
+          time: openClass.time ?? '—',
+          room: openClass.room ?? '—',
+        },
+        teacherTest: {
+          hasSubmission: Boolean(teacherTestResult),
+          testId: teacherTestResult?.testId ?? null,
+          testName: teacherTestResult?.test?.name ?? null,
+          testCreatedAt: teacherTestResult?.test?.createdAt?.toISOString?.() ?? null,
+          summary: teacherTestSummary,
+        },
+        students: {
+          totalResponses: studentResults.length,
+          forms: studentSummariesByForm,
+        },
+        expertsOpenLesson: {
+          totalResponses: expertOpenLessonResults.length,
+          forms: expertOpenLessonSummariesByForm,
+        },
+        expertsFileEval: {
+          totalResponses: expertFileEvalResults.length,
+          forms: expertFileEvalSummariesByForm,
+        },
+      },
+    });
+  } catch (e) {
+    console.error('Open class results summary error', e);
     return res.status(500).json({ success: false, message: 'Ошибка сервера' });
   }
 });
