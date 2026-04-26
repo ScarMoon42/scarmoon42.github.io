@@ -62,7 +62,7 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
           <p className="text-xl">Секретарь</p>
         </div>
 
-        <h2 className="text-2xl mb-8">Рейтинг ППС</h2>
+        <h2 className="text-2xl mb-8">Рейтинг</h2>
         {loading ? (
           <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-white p-12">
             <Loader2 className="h-10 w-10 animate-spin text-purple-600" />
@@ -112,7 +112,7 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-sm text-gray-600">ППС</p>
+                    <p className="text-sm text-gray-600">Преподаватель</p>
                     <p className="text-lg">{teacher.name}</p>
                   </div>
 

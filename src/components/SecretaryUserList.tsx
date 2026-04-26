@@ -296,7 +296,7 @@ export function SecretaryUserList({ onBack, onLogout }: SecretaryUserListProps) 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Эксперт">Эксперт</SelectItem>
-                      <SelectItem value="Преподаватель">Претендент ППС</SelectItem>
+                      <SelectItem value="Преподаватель">Преподаватель</SelectItem>
                       <SelectItem value="Внешний эксперт">Внешний эксперт</SelectItem>
                       <SelectItem value="Секретарь">Секретарь</SelectItem>
                     </SelectContent>
@@ -426,7 +426,7 @@ export function SecretaryUserList({ onBack, onLogout }: SecretaryUserListProps) 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Эксперт">Эксперт</SelectItem>
-                      <SelectItem value="Преподаватель">Претендент ППС</SelectItem>
+                      <SelectItem value="Преподаватель">Преподаватель</SelectItem>
                       <SelectItem value="Внешний эксперт">Внешний эксперт</SelectItem>
                       <SelectItem value="Секретарь">Секретарь</SelectItem>
                     </SelectContent>

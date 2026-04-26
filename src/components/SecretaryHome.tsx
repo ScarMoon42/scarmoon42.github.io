@@ -193,7 +193,7 @@ export function SecretaryHome({ onNavigate, onLogout }: SecretaryHomeProps) {
                 </svg>
               </div>
               <p className="text-center text-lg">
-                Рейтинг ППС
+                Рейтинг
               </p>
             </CardContent>
           </Card>
