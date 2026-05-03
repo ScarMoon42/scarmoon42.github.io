@@ -38,8 +38,12 @@ async function apiCall<T>(
 
     // Получаем токен из Keycloak (безопаснее чем localStorage)
     const token = getAccessToken();
+    const DEBUG = import.meta.env.MODE === 'development' || typeof window !== 'undefined' && (window as any).__DEBUG === true;
     if (token) {
       defaultHeaders['Authorization'] = `Bearer ${token}`;
+      if (DEBUG) console.log('[API] Token available for request, length:', token.length);
+    } else {
+      if (DEBUG) console.warn('[API] No access token available for request');
     }
 
     const baseUrl = API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:3001');
@@ -70,6 +74,16 @@ async function apiCall<T>(
 
     if (!response.ok) {
       const errMsg = (data && typeof data === 'object' && 'message' in data && (data as { message: unknown }).message);
+      const fullError = (data && typeof data === 'object' && 'error' in data && (data as { error: unknown }).error);
+      const DEBUG = import.meta.env.MODE === 'development' || typeof window !== 'undefined' && (window as any).__DEBUG === true;
+      if (DEBUG) {
+        console.error(`[API] Error from ${endpoint}:`, { 
+          status: response.status, 
+          message: errMsg,
+          error: fullError,
+          fullResponse: data 
+        });
+      }
       return {
         success: false,
         error: (errMsg != null && errMsg !== '' ? String(errMsg) : `HTTP ${response.status}`),
@@ -84,6 +98,8 @@ async function apiCall<T>(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const DEBUG = import.meta.env.MODE === 'development' || typeof window !== 'undefined' && (window as any).__DEBUG === true;
+    if (DEBUG) console.error(`[API] Request error for ${endpoint}:`, errorMessage);
     return {
       success: false,
       error: errorMessage,

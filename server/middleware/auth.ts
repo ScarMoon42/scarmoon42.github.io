@@ -87,6 +87,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     // Keycloak по умолчанию выставляет aud: ['account'], а не clientId.
     // Проверяем только issuer здесь; clientId валидируем через azp ниже.
+    const validIssuers = getValidIssuers();
+    const DEBUG = process.env.DEBUG === 'true';
+    if (DEBUG) console.log('[AUTH] Attempting JWT verification with issuers:', validIssuers);
+    
     const { payload } = await jwtVerify(token, jwks, {
       issuer: getValidIssuers(),
     });
@@ -94,7 +98,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     // Ручная проверка azp (authorized party) — содержит clientId в Keycloak токенах
     const expectedClient = process.env.KEYCLOAK_CLIENT_ID || 'frontend';
     const p0 = payload as unknown as KeycloakAccessToken;
+    
+    if (DEBUG) {
+      console.log('[AUTH] Token payload:', {
+        sub: p0.sub,
+        preferred_username: p0.preferred_username,
+        azp: p0.azp,
+        expected_client: expectedClient,
+        aud: p0.aud,
+        issuer: payload.iss,
+      });
+    }
+    
     if (p0.azp && p0.azp !== expectedClient) {
+      console.error('[AUTH] Client mismatch:', { provided: p0.azp, expected: expectedClient });
       return res.status(401).json({ success: false, message: 'Неверный клиент токена' });
     }
 
@@ -108,6 +125,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       'Пользователь';
 
     if (!p.sub || !username) {
+      console.error('[AUTH] Missing required fields:', { sub: p.sub, username });
       return res.status(401).json({ success: false, message: 'Неверный токен' });
     }
 
@@ -115,6 +133,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const dbUser = await prisma.user.findFirst({
       where: { externalId: p.sub }
     });
+
+    if (DEBUG) console.log('[AUTH] User authenticated:', { sub: p.sub, username, dbUserId: dbUser?.id });
 
     req.auth = {
       id: dbUser?.id ?? 0,
@@ -128,7 +148,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
     next();
   } catch (e) {
-    console.error('Keycloak token verify error', e);
+    const DEBUG = process.env.DEBUG === 'true';
+    if (DEBUG) console.error('[AUTH] Token verify error:', e instanceof Error ? e.message : e);
     return res.status(401).json({ success: false, message: 'Неверный токен' });
   }
 }

@@ -17,5 +17,5 @@ RUN npm run build
 # Открываем порт
 EXPOSE 3001
 
-# Команда для запуска (монолит: Express обслуживает API и статику React)
-CMD ["npm", "run", "dev:server"]
+# Команда для запуска: сначала миграции, затем сервер
+CMD ["/bin/sh", "-c", "npx prisma migrate deploy && npm run dev:server"]
