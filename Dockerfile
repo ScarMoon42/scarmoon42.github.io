@@ -14,8 +14,11 @@ COPY . .
 RUN npm run db:generate
 RUN npm run build
 
+# Делаем entrypoint исполняемым
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Открываем порт
 EXPOSE 3001
 
-# Команда для запуска: сначала миграции, затем сервер
-CMD ["/bin/sh", "-c", "npx prisma migrate deploy && npm run dev:server"]
+# Скрипт запуска: ожидание БД → миграции → сервер
+CMD ["/app/docker-entrypoint.sh"]
