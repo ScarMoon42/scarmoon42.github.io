@@ -129,10 +129,16 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
 
                   <div className="mt-4">
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-purple-600 h-2 rounded-full transition-all"
-                        style={{ width: `${teacher.rating}%` }}
-                      ></div>
+                      {(() => {
+                        const totalMax = teacher.details.reduce((sum, d) => sum + d.maxScore, 0);
+                        const percentage = totalMax > 0 ? (teacher.rating / totalMax) * 100 : 0;
+                        return (
+                          <div
+                            className="bg-purple-600 h-2 rounded-full transition-all"
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </CardContent>

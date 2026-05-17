@@ -265,6 +265,85 @@ router.delete('/:id', requireAuth, requireAppRole(['Секретарь']), async
   }
 });
 
+function normalizeAnswer(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function calculateSurveyScore(results: Array<{ result: string }>, maxScore: number = 10): number {
+  if (results.length === 0) return 0;
+  let totalVal = 0;
+  let count = 0;
+  results.forEach(r => {
+    try {
+      const resObj = JSON.parse(r.result);
+      Object.values(resObj).forEach((v: any) => {
+        let num: number | null = null;
+        if (v === true || String(v).toLowerCase() === 'true' || String(v).toLowerCase() === 'yes') {
+          num = 4;
+        } else if (v === false || String(v).toLowerCase() === 'false' || String(v).toLowerCase() === 'no') {
+          num = 1;
+        } else {
+          const strVal = String(v);
+          const match = strVal.match(/\d+/);
+          if (match) {
+            num = parseInt(match[0], 10);
+          }
+        }
+
+        if (num !== null && !isNaN(num)) {
+          totalVal += num;
+          count++;
+        }
+      });
+    } catch (e) { /* ignore parse errors */ }
+  });
+
+  if (count === 0) return 0;
+  const average = totalVal / count;
+  // Assume standard Likert scale (1-4). If average >= 4, it gives maxScore.
+  return Math.min(maxScore, Math.round((average / 4) * maxScore));
+}
+
+function calculateTeacherTestScore(results: Array<{ result: string; test: { parsedData: string | null } }>): number {
+  if (results.length === 0) return 0;
+  
+  let totalPercentage = 0;
+  let validTestsCount = 0;
+
+  results.forEach(res => {
+    try {
+      if (!res.test.parsedData) return;
+      const parsedData = JSON.parse(res.test.parsedData);
+      const questions = parsedData.questions ?? [];
+      if (questions.length === 0) return;
+
+      const answersMap = JSON.parse(res.result);
+      let correctCount = 0;
+
+      questions.forEach((question: any, idx: number) => {
+        const questionKey = String(idx);
+        const selectedAnswer = answersMap[questionKey] !== undefined ? normalizeAnswer(answersMap[questionKey]) : '';
+        const correctAnswers = (question.correctAnswers ?? []).map((ans: any) => normalizeAnswer(ans));
+        
+        const isCorrect = selectedAnswer !== '' && correctAnswers.includes(selectedAnswer);
+        if (isCorrect) {
+          correctCount++;
+        }
+      });
+
+      totalPercentage += correctCount / questions.length;
+      validTestsCount++;
+    } catch (e) { /* ignore parse errors */ }
+  });
+
+  if (validTestsCount === 0) return 0;
+  const averagePercentage = totalPercentage / validTestsCount;
+  return Math.min(20, Math.round(averagePercentage * 20));
+}
+
 // GET /users/ranking — рейтинг преподавателей (для секретаря)
 router.get('/ranking', requireAuth, requireAppRole(['Секретарь']), async (_req: Request, res: Response) => {
   try {
@@ -299,53 +378,29 @@ router.get('/ranking', requireAuth, requireAppRole(['Секретарь']), asyn
       const studentResults = await prisma.resultOpenClassStudent.findMany({
         where: { openClass: { teacherId: teacher.id } },
       });
-      let cat3Score = 0;
-      if (studentResults.length > 0) {
-        let totalVal = 0;
-        let count = 0;
-        studentResults.forEach(r => {
-          try {
-            const resObj = JSON.parse(r.result);
-            Object.values(resObj).forEach((v: any) => {
-              // Если это число (например Ликерт 1-4)
-              let num = parseInt(v, 10);
-
-              // Если это булево или текст "true/false" из GIFT
-              if (v === true || v === 'true' || v === 'yes') num = 4;
-              if (v === false || v === 'false' || v === 'no') num = 1;
-
-              if (!isNaN(num)) {
-                totalVal += num;
-                count++;
-              }
-            });
-          } catch (e) { /* ignore parse errors */ }
-        });
-        // Максимум 10 баллов. Если средний балл 4.0 (макс), то 10 баллов.
-        // множитель 2.5 (4 * 2.5 = 10)
-        cat3Score = count > 0 ? Math.min(10, Math.round((totalVal / count) * 2.5)) : 0;
-      }
+      const cat3Score = calculateSurveyScore(studentResults, 10);
 
       // 4. Тесты (Category 4) - max 20
       const testResults = await prisma.resultTestTeacher.findMany({
         where: { teacherId: teacher.id },
+        include: { test: true },
       });
-      // Можно начислять баллы за прохождение + за средний балл, если GIFT тесты имеют правильные/неправильные ответы
-      // Пока упрощенно: 20 баллов за прохождение хотя бы одного теста
-      const cat4Score = testResults.length > 0 ? 20 : 0;
+      const cat4Score = calculateTeacherTestScore(testResults);
 
-      // 5. Экспертная анкета (Category 5) - max 10
-      // Считаем оценки по файлам и за открытые занятия
+      // 5. Экспертная оценка файлов (Анкетирование работодателем) (Category 5) - max 10
       const expertResultFiles = await prisma.resultFiles.findMany({
-        where: { teacherId: teacher.id },
+        where: {
+          teacherId: teacher.id,
+          form: { formType: 'expert_file_eval' },
+        },
       });
+      const cat5Score = calculateSurveyScore(expertResultFiles, 10);
+
+      // 6. Оценка открытого занятия экспертами (Category 6) - max 10
       const expertResultOpenClasses = await prisma.resultOpenClassExpert.findMany({
         where: { openClass: { teacherId: teacher.id } }
       });
-      const cat5Score = (expertResultFiles.length > 0 || expertResultOpenClasses.length > 0) ? 10 : 0;
-
-      // 6. Собеседование (Category 6) - max 10
-      const cat6Score = 0; // Пока не реализовано в БД
+      const cat6Score = calculateSurveyScore(expertResultOpenClasses, 10);
 
       const totalRating = cat1Score + cat2Score + cat3Score + cat4Score + cat5Score + cat6Score;
 
@@ -361,7 +416,7 @@ router.get('/ranking', requireAuth, requireAppRole(['Секретарь']), asyn
           { category: "3 Анкетирование обучающихся", score: cat3Score, maxScore: 10 },
           { category: "4 Предметные компетенции (тест)", score: cat4Score, maxScore: 20 },
           { category: "5 Анкетирование работодателем", score: cat5Score, maxScore: 10 },
-          { category: "6 Собеседование", score: cat6Score, maxScore: 10 },
+          { category: "6 Оценка открытого занятия экспертами", score: cat6Score, maxScore: 10 },
         ],
       });
     }
