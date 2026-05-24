@@ -1,0 +1,45 @@
+diff --git a/node_modules/keycloak-js/lib/keycloak.js b/node_modules/keycloak-js/lib/keycloak.js
+index c82b253..682c356 100644
+--- a/node_modules/keycloak-js/lib/keycloak.js
++++ b/node_modules/keycloak-js/lib/keycloak.js
+@@ -1620,11 +1620,37 @@ export default class Keycloak {
+  * @returns {string}
+  */
+ function createUUID () {
+-  if (typeof crypto === 'undefined' || typeof crypto.randomUUID === 'undefined') {
+-    throw new Error('Web Crypto API is not available.')
++  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'undefined') {
++    return crypto.randomUUID()
+   }
+ 
+-  return crypto.randomUUID()
++  // Fallback: generate a v4 UUID using crypto.getRandomValues or Math.random
++  var hexValues = '0123456789abcdef'
++
++  function getRandomHex (count) {
++    var result = ''
++    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues !== 'undefined') {
++      var randomBytes = new Uint8Array(count)
++      crypto.getRandomValues(randomBytes)
++      for (var i = 0; i < count; i++) {
++        result += hexValues[randomBytes[i] >> 4] + hexValues[randomBytes[i] & 0x0f]
++      }
++    } else {
++      for (var j = 0; j < count; j++) {
++        var val = Math.floor(Math.random() * 256)
++        result += hexValues[val >> 4] + hexValues[val & 0x0f]
++      }
++    }
++    return result
++  }
++
++  // xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
++  var s = getRandomHex(4) + '-' + getRandomHex(2) + '-4' + getRandomHex(2).substr(1) + '-'
++  var yHex = getRandomHex(1)
++  var yVal = (parseInt(yHex[0], 16) & 0x3) | 0x8
++  s += yVal.toString(16) + yHex[1] + getRandomHex(1) + '-' + getRandomHex(6)
++
++  return s
+ }
+ 
+ /**
