@@ -5,6 +5,7 @@ WORKDIR /app
 # Устанавливаем зависимости
 COPY package*.json .npmrc ./
 COPY prisma ./prisma
+COPY patches ./patches
 RUN npm install
 
 # Копируем исходный код
