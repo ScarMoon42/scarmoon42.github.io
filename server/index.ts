@@ -64,6 +64,7 @@ app.get('/health', (_req, res) => {
 app.get('/keycloak-status', (_req, res) => {
   const keycloakUrl = getKeycloakFrontendUrl();
   const realm = process.env.KEYCLOAK_REALM || 'app';
+  const allowHttpFallback = process.env.ALLOW_HTTP_FALLBACK === 'true';
 
   res.json({
     ok: true,
@@ -71,6 +72,7 @@ app.get('/keycloak-status', (_req, res) => {
       url: keycloakUrl,
       realm,
       configUrl: `${keycloakUrl}/realms/${realm}/.well-known/openid-configuration`,
+      allowHttpFallback,
     },
   });
 });

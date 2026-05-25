@@ -18,6 +18,7 @@ async function fetchKeycloakConfig() {
     if (res.ok) {
       const data = await res.json();
       if (data?.keycloak) {
+        (window as any).ALLOW_KEYCLOAK_HTTP_FALLBACK = data.keycloak.allowHttpFallback === true;
         return {
           url: data.keycloak.url,
           realm: data.keycloak.realm,
@@ -30,6 +31,7 @@ async function fetchKeycloakConfig() {
   }
 
   // Fallback to build-time vars
+  (window as any).ALLOW_KEYCLOAK_HTTP_FALLBACK = import.meta.env.VITE_ALLOW_HTTP_FALLBACK === 'true';
   return {
     // Keycloak in this setup is served under /auth (KC_HTTP_RELATIVE_PATH=/auth).
     url: import.meta.env.VITE_KEYCLOAK_URL || 'http://127.0.0.1:8080/auth',
