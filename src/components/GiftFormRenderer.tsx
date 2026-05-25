@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
+import { Checkbox } from "./ui/checkbox";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
@@ -46,8 +47,43 @@ export function GiftFormRenderer({
     const questions = data.questions;
     const currentQuestion = questions[currentQuestionIdx];
 
+    // Determine if this question allows multiple answers
+    const isMultipleSelection = (q: GiftQuestion): boolean => {
+        // If it has weighted options, check if multiple positive weights
+        if (q.options && Array.isArray(q.options)) {
+            const positiveWeights = q.options.filter((opt: any) => {
+                const weight = opt.weight ?? (opt.isCorrect ? 100 : 0);
+                return weight > 0;
+            });
+            if (positiveWeights.length > 1) return true;
+        }
+        // If it has multiple correct answers
+        if (q.correctAnswers && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 1) {
+            return true;
+        }
+        return false;
+    };
+
     const handleAnswerChange = (value: any) => {
         setAnswers(prev => ({ ...prev, [currentQuestionIdx]: value }));
+    };
+
+    const handleMultipleAnswerChange = (optionText: string, checked: boolean) => {
+        setAnswers(prev => {
+            const current = prev[currentQuestionIdx] || [];
+            const updated = Array.isArray(current) ? [...current] : [];
+            if (checked) {
+                if (!updated.includes(optionText)) {
+                    updated.push(optionText);
+                }
+            } else {
+                const idx = updated.indexOf(optionText);
+                if (idx > -1) {
+                    updated.splice(idx, 1);
+                }
+            }
+            return { ...prev, [currentQuestionIdx]: updated };
+        });
     };
 
     const nextQuestion = () => {
@@ -70,10 +106,37 @@ export function GiftFormRenderer({
         return <div className="text-gray-500 p-8 text-center">Нет доступных вопросов.</div>;
     }
 
+    const isMultiple = isMultipleSelection(currentQuestion);
+
     const renderQuestionInput = () => {
         switch (currentQuestion.type) {
             case 'multiple_choice':
             case 'true_false':
+                // Multiple selection mode (checkboxes)
+                if (isMultiple && currentQuestion.type === 'multiple_choice') {
+                    const selectedAnswers = answers[currentQuestionIdx] || [];
+                    return (
+                        <div className="space-y-3">
+                            {currentQuestion.options?.map((option, index) => (
+                                <div
+                                    key={index}
+                                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-colors"
+                                >
+                                    <Checkbox
+                                        id={`opt-${index}`}
+                                        checked={selectedAnswers.includes(option.text)}
+                                        onCheckedChange={(checked) => handleMultipleAnswerChange(option.text, !!checked)}
+                                    />
+                                    <Label htmlFor={`opt-${index}`} className="flex-1 cursor-pointer py-1">
+                                        {option.text}
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                }
+
+                // Single selection mode (radio buttons)
                 return (
                     <RadioGroup
                         value={answers[currentQuestionIdx] || ""}

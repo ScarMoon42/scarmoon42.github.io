@@ -327,40 +327,46 @@ function calculateTeacherTestScore(results: Array<{ result: string; test: { pars
       questions.forEach((question: any, idx: number) => {
         const questionKey = String(idx);
         const selectedAnswer = answersMap[questionKey] !== undefined ? normalizeAnswer(answersMap[questionKey]) : '';
+        const selectedAnswers = Array.isArray(answersMap[questionKey]) 
+          ? (answersMap[questionKey] as any[]).map(a => normalizeAnswer(a))
+          : (selectedAnswer !== '' ? [selectedAnswer] : []);
         
         // Calculate max possible score for this question
-        // For each option, max score is its weight (or 100 if not specified)
         let questionMaxScore = 100;
+        let gainedScore = 0;
+        
         if (question.options && Array.isArray(question.options)) {
-          // For weighted questions, max score is the sum of all positive weights
+          // For weighted questions, max score is the sum of positive weights
           const positiveWeights = question.options
             .map((opt: any) => opt.weight ?? (opt.isCorrect ? 100 : 0))
             .filter((w: number) => w > 0);
           if (positiveWeights.length > 0) {
             questionMaxScore = positiveWeights.reduce((a: number, b: number) => a + b, 0);
           }
-        }
-        maxScore += questionMaxScore;
 
-        // Calculate score for selected answer
-        if (selectedAnswer !== '') {
-          if (question.options && Array.isArray(question.options)) {
-            // Find matching option and get its weight
-            const selectedOption = question.options.find((opt: any) => 
-              normalizeAnswer(opt.text) === selectedAnswer
-            );
-            if (selectedOption) {
-              const weight = selectedOption.weight ?? (selectedOption.isCorrect ? 100 : 0);
-              totalScore += Math.max(0, weight); // Only count positive weights
+          // Calculate score for selected answers
+          selectedAnswers.forEach((answer) => {
+            if (answer !== '') {
+              const selectedOption = question.options.find((opt: any) => 
+                normalizeAnswer(opt.text) === answer
+              );
+              if (selectedOption) {
+                const weight = selectedOption.weight ?? (selectedOption.isCorrect ? 100 : 0);
+                gainedScore += Math.max(0, weight); // Only count positive weights
+              }
             }
-          } else {
-            // Fallback for simple questions without options structure
-            const correctAnswers = (question.correctAnswers ?? []).map((ans: any) => normalizeAnswer(ans));
-            if (correctAnswers.includes(selectedAnswer)) {
-              totalScore += 100;
-            }
-          }
+          });
+        } else {
+          // Fallback for simple questions without options structure
+          const correctAnswers = (question.correctAnswers ?? []).map((ans: any) => normalizeAnswer(ans));
+          const isCorrect = selectedAnswers.length > 0 && selectedAnswers.some(ans => correctAnswers.includes(ans));
+          gainedScore = isCorrect ? 100 : 0;
         }
+
+        // Cap gained score at max possible
+        gainedScore = Math.min(gainedScore, questionMaxScore);
+        totalScore += gainedScore;
+        maxScore += questionMaxScore;
       });
 
       if (maxScore > 0) {
