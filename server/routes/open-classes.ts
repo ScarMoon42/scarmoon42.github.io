@@ -13,7 +13,7 @@ function formatDate(d: Date): string {
 type GiftQuestion = {
   text?: string;
   title?: string;
-  options?: Array<{ text?: string; isCorrect?: boolean }>;
+  options?: Array<{ text?: string; isCorrect?: boolean; weight?: number }>;
   correctAnswers?: string[];
 };
 
@@ -108,27 +108,63 @@ function buildTeacherTestDetails(
 
   const questions = parsedData.questions ?? [];
   const resultMap = parseJsonObject(teacherResult.result);
-  let correctCount = 0;
+  let totalScore = 0;
+  let maxScore = 0;
 
   const questionsDetails = questions.map((question, idx) => {
     const questionKey = String(idx);
     const selectedAnswer = normalizeAnswer(resultMap[questionKey]);
     const correctAnswers = (question.correctAnswers ?? []).map((answer) => normalizeAnswer(answer));
-    const isCorrect = selectedAnswer !== '' && correctAnswers.includes(selectedAnswer);
-    if (isCorrect) correctCount += 1;
+    
+    // Calculate max possible score for this question
+    let questionMaxScore = 100;
+    let gainedScore = 0;
+    
+    if (question.options && Array.isArray(question.options)) {
+      // For weighted questions, max score is the sum of positive weights
+      const positiveWeights = question.options
+        .map((opt: any) => opt.weight ?? (opt.isCorrect ? 100 : 0))
+        .filter((w: number) => w > 0);
+      if (positiveWeights.length > 0) {
+        questionMaxScore = positiveWeights.reduce((a: number, b: number) => a + b, 0);
+      }
+
+      // Find selected option and get its weight
+      if (selectedAnswer !== '') {
+        const selectedOption = question.options.find((opt: any) => 
+          normalizeAnswer(opt.text) === selectedAnswer
+        );
+        if (selectedOption) {
+          const weight = selectedOption.weight ?? (selectedOption.isCorrect ? 100 : 0);
+          gainedScore = Math.max(0, weight); // Only count positive weights
+        }
+      }
+    } else {
+      // Fallback for simple questions
+      const isCorrect = selectedAnswer !== '' && correctAnswers.includes(selectedAnswer);
+      gainedScore = isCorrect ? 100 : 0;
+    }
+
+    totalScore += gainedScore;
+    maxScore += questionMaxScore;
 
     return {
       questionIndex: idx,
       questionText: getQuestionLabel(question, idx),
       selectedAnswer,
       correctAnswers,
-      isCorrect,
+      isCorrect: gainedScore === 100 || (gainedScore > 0 && gainedScore === questionMaxScore),
+      score: gainedScore,
+      maxScore: questionMaxScore,
     };
   });
 
   return {
     totalQuestions: questions.length,
-    correctAnswers: correctCount,
+    correctAnswers: Math.round((totalScore / (maxScore || 1)) * questions.length), // For backward compatibility
+    totalScore,
+    maxScore,
+    percentage: maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0,
     questions: questionsDetails,
   };
 }

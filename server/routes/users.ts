@@ -321,21 +321,52 @@ function calculateTeacherTestScore(results: Array<{ result: string; test: { pars
       if (questions.length === 0) return;
 
       const answersMap = JSON.parse(res.result);
-      let correctCount = 0;
+      let totalScore = 0;
+      let maxScore = 0;
 
       questions.forEach((question: any, idx: number) => {
         const questionKey = String(idx);
         const selectedAnswer = answersMap[questionKey] !== undefined ? normalizeAnswer(answersMap[questionKey]) : '';
-        const correctAnswers = (question.correctAnswers ?? []).map((ans: any) => normalizeAnswer(ans));
         
-        const isCorrect = selectedAnswer !== '' && correctAnswers.includes(selectedAnswer);
-        if (isCorrect) {
-          correctCount++;
+        // Calculate max possible score for this question
+        // For each option, max score is its weight (or 100 if not specified)
+        let questionMaxScore = 100;
+        if (question.options && Array.isArray(question.options)) {
+          // For weighted questions, max score is the sum of all positive weights
+          const positiveWeights = question.options
+            .map((opt: any) => opt.weight ?? (opt.isCorrect ? 100 : 0))
+            .filter((w: number) => w > 0);
+          if (positiveWeights.length > 0) {
+            questionMaxScore = positiveWeights.reduce((a: number, b: number) => a + b, 0);
+          }
+        }
+        maxScore += questionMaxScore;
+
+        // Calculate score for selected answer
+        if (selectedAnswer !== '') {
+          if (question.options && Array.isArray(question.options)) {
+            // Find matching option and get its weight
+            const selectedOption = question.options.find((opt: any) => 
+              normalizeAnswer(opt.text) === selectedAnswer
+            );
+            if (selectedOption) {
+              const weight = selectedOption.weight ?? (selectedOption.isCorrect ? 100 : 0);
+              totalScore += Math.max(0, weight); // Only count positive weights
+            }
+          } else {
+            // Fallback for simple questions without options structure
+            const correctAnswers = (question.correctAnswers ?? []).map((ans: any) => normalizeAnswer(ans));
+            if (correctAnswers.includes(selectedAnswer)) {
+              totalScore += 100;
+            }
+          }
         }
       });
 
-      totalPercentage += correctCount / questions.length;
-      validTestsCount++;
+      if (maxScore > 0) {
+        totalPercentage += totalScore / maxScore;
+        validTestsCount++;
+      }
     } catch (e) { /* ignore parse errors */ }
   });
 

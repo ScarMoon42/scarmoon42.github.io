@@ -13,6 +13,7 @@ export interface GiftQuestion {
     options?: {
         text: string;
         isCorrect: boolean;
+        weight?: number; // Percentage weight for this answer
         feedback?: string;
     }[];
     correctAnswers?: string[];

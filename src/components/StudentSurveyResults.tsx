@@ -106,15 +106,36 @@ export function StudentSurveyResults({ lessonId, onBack, lessonInfo }: ResultsPr
                                     Версия теста: {summary.teacherTest.testName}
                                 </p>
                             )}
-                            <p className="font-medium">
-                                Правильных ответов: {teacherTest.correctAnswers} из {teacherTest.totalQuestions}
-                            </p>
+                            <div className="rounded-lg bg-purple-50 p-4 mb-4">
+                                {teacherTest.percentage !== undefined ? (
+                                    <>
+                                        <p className="font-medium text-lg">
+                                            Результат: <span className="text-purple-600">{teacherTest.percentage}%</span>
+                                        </p>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            Баллов: {teacherTest.totalScore} из {teacherTest.maxScore}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p className="font-medium">
+                                        Правильных ответов: {teacherTest.correctAnswers} из {teacherTest.totalQuestions}
+                                    </p>
+                                )}
+                            </div>
                             <div className="space-y-3">
                                 {teacherTest.questions.map((q: any) => (
                                     <div key={q.questionIndex} className="rounded border p-3">
                                         <p className="font-medium mb-2">{q.questionText}</p>
                                         <p className="text-sm">Ответ преподавателя: <span className="font-semibold">{q.selectedAnswer || "—"}</span></p>
                                         <p className="text-sm">Правильный ответ: <span className="font-semibold">{(q.correctAnswers || []).join(", ") || "—"}</span></p>
+                                        {q.score !== undefined && q.maxScore !== undefined && (
+                                            <p className="text-sm mt-1">
+                                                Баллы: <span className="font-semibold">{q.score} из {q.maxScore}</span>
+                                                {q.maxScore > 0 && (
+                                                    <span className="text-gray-600"> ({Math.round((q.score / q.maxScore) * 100)}%)</span>
+                                                )}
+                                            </p>
+                                        )}
                                         <p className={`text-sm mt-1 ${q.isCorrect ? "text-green-700" : "text-red-700"}`}>
                                             {q.isCorrect ? "Верно" : "Неверно"}
                                         </p>

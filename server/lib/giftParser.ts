@@ -10,11 +10,18 @@
  * - True/False: {T} or {F}
  * - Short answer: {answer1 =answer2}
  * - Essay: {}
+ * - Weighted answers: {~%50%partial ~%-50%wrong =answer}
  * 
  * Format details:
- * = indicates correct answer
- * ~ indicates wrong answers (distractors)
+ * = indicates correct answer (100% weight)
+ * ~ indicates wrong answers (distractors, 0% weight)
+ * %N% indicates weight percentage (can be 0-100, or negative for penalty)
  * # is used for feedback
+ * 
+ * Weighted answer examples:
+ * ~%50%answer     - 50% partial credit
+ * ~%-50%answer    - 50% penalty for this wrong answer
+ * ~%33.333%answer - 33.333% credit for this option
  */
 
 export interface GiftQuestion {
@@ -24,6 +31,7 @@ export interface GiftQuestion {
   options?: {
     text: string;
     isCorrect: boolean;
+    weight?: number; // Percentage: 100 for correct, 0-100 for partial, negative for wrong
     feedback?: string;
   }[];
   correctAnswers?: string[];
@@ -106,18 +114,40 @@ function parseQuestion(questionText: string): GiftQuestion | null {
   const answerParts = answerSection.split(/(?:^|[^\\])~|(?:^|[^\\])=/);
   let isMultipleChoice = answerSection.includes('~');
 
-  // Better parsing that handles ~ and = properly
-  const answerTokens: { text: string; isCorrect: boolean; feedback?: string }[] = [];
+  // Better parsing that handles ~ and = properly with weights
+  const answerTokens: { text: string; isCorrect: boolean; weight?: number; feedback?: string }[] = [];
   let currentPos = 0;
   let isCorrect = answerSection[0] === '=';
 
-  // Split by ~ and = while preserving the delimiter
-  const regex = /([~=][^~=]*)/g;
+  // Split by ~ and = while preserving the delimiter and handling weights
+  const regex = /([~=](?:%[-\d.]+%)?[^~=]*)/g;
   let match;
   while ((match = regex.exec(answerSection)) !== null) {
     const token = match[1];
-    const isCorr = token[0] === '=';
+    const delimiter = token[0]; // ~ or =
+    let isCorr = delimiter === '=';
+    let weight: number | undefined;
     let answer = token.substring(1).trim();
+
+    // Extract weight if present: %50% or %-50%
+    const weightMatch = answer.match(/^%(-?\d+(?:\.\d+)?)%\s*/);
+    if (weightMatch) {
+      weight = parseFloat(weightMatch[1]);
+      answer = answer.substring(weightMatch[0].length).trim();
+      // If weight is explicitly provided, use it to determine correctness
+      // weight > 0 means partial or full credit, weight < 0 means penalty
+      if (weight === 100) {
+        isCorr = true;
+      } else if (weight <= 0) {
+        isCorr = false;
+      }
+    } else if (isCorr) {
+      // If no explicit weight but marked with =, it's 100% correct
+      weight = 100;
+    } else {
+      // If no explicit weight and marked with ~, it's 0% (wrong)
+      weight = 0;
+    }
 
     // Extract feedback if present: answer # feedback
     let feedback: string | undefined;
@@ -131,6 +161,7 @@ function parseQuestion(questionText: string): GiftQuestion | null {
       answerTokens.push({
         text: answer,
         isCorrect: isCorr,
+        weight,
         feedback,
       });
       if (isCorr) {
@@ -146,9 +177,11 @@ function parseQuestion(questionText: string): GiftQuestion | null {
     for (const answer of answers) {
       const trimmedAnswer = answer.trim();
       if (trimmedAnswer) {
+        const isCorr = answerSection.includes(`=${trimmedAnswer}`);
         answerTokens.push({
           text: trimmedAnswer,
-          isCorrect: answerSection.includes(`=${trimmedAnswer}`),
+          isCorrect: isCorr,
+          weight: isCorr ? 100 : 0,
         });
       }
     }
