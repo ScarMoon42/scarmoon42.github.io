@@ -147,6 +147,7 @@ services:
       KEYCLOAK_ISSUER_ALIASES: ""
       LOKI_URL: "http://loki:3100"
       PROMETHEUS_URL: "http://prometheus:9090"
+      ALLOW_HTTP_FALLBACK: "true"
     depends_on:
       db:
         condition: service_healthy
