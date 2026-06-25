@@ -25,6 +25,7 @@ interface User {
   id: string;
   name: string;
   login: string;
+  password?: string;
   role: UserRole;
   isTemporary: boolean;
   expirationDate?: string;
@@ -37,6 +38,7 @@ function apiUserToUser(u: ApiUser): User {
     id: u.id,
     name: u.name,
     login: u.login,
+    password: u.password,
     role: u.role as UserRole,
     isTemporary: !!u.isTemporary,
     expirationDate: u.expirationDate,
@@ -500,6 +502,7 @@ export function SecretaryUserList({ onBack, onLogout }: SecretaryUserListProps) 
                     <tr>
                       <th className="px-6 py-4 text-left">ФИО</th>
                       <th className="px-6 py-4 text-left">Логин</th>
+                      <th className="px-6 py-4 text-left">Пароль</th>
                       <th className="px-6 py-4 text-left">Роль</th>
                       <th className="px-6 py-4 text-left">Статус</th>
                       <th className="px-6 py-4 text-center">Действия</th>
@@ -510,6 +513,13 @@ export function SecretaryUserList({ onBack, onLogout }: SecretaryUserListProps) 
                       <tr key={user.id} className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                         <td className="px-6 py-4">{user.name}</td>
                         <td className="px-6 py-4 text-gray-600">{user.login}</td>
+                        <td className="px-6 py-4 font-mono text-sm text-gray-600">
+                          {user.password ? (
+                            <span className="bg-gray-100 px-2 py-1 rounded select-all">{user.password}</span>
+                          ) : (
+                            <span className="text-gray-400 italic">Скрыт</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
                             <span className="font-medium">{user.role}</span>

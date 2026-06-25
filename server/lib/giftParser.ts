@@ -27,7 +27,7 @@
 export interface GiftQuestion {
   title?: string;
   text: string;
-  type: 'multiple_choice' | 'true_false' | 'short_answer' | 'essay' | 'numerical' | 'matching';
+  type: 'multiple_choice' | 'true_false' | 'short_answer' | 'essay' | 'numerical' | 'matching' | 'rating';
   options?: {
     text: string;
     isCorrect: boolean;
@@ -187,10 +187,16 @@ function parseQuestion(questionText: string): GiftQuestion | null {
     }
   }
 
+  const hasNumericOptions = answerTokens.length > 1 && answerTokens.every((token) => {
+    const normalized = String(token.text).trim();
+    return normalized !== '' && /^-?\d+(?:\.\d+)?$/.test(normalized);
+  });
+  const isRating = title && title.toLowerCase().includes('rating');
+
   const question: GiftQuestion = {
     title,
     text: textPart,
-    type: answerTokens.length > 2 || isMultipleChoice ? 'multiple_choice' : 'short_answer',
+    type: isRating || hasNumericOptions ? 'rating' : (answerTokens.length > 2 || isMultipleChoice ? 'multiple_choice' : 'short_answer'),
     options: answerTokens,
     correctAnswers: correctAnswers.length > 0 ? correctAnswers : undefined,
   };

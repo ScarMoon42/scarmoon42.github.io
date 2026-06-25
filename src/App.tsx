@@ -14,6 +14,7 @@ import { ExpertDocumentsPage } from "./pages/ExpertDocumentsPage";
 import { ExpertChecklistPage } from "./pages/ExpertChecklistPage";
 import { ExpertSurveyPage } from "./pages/ExpertSurveyPage";
 import { ExpertOpenLessonPage } from "./pages/ExpertOpenLessonPage";
+import { ExpertKpUmkPage } from "./pages/ExpertKpUmkPage";
 import { SecretaryHomePage } from "./pages/SecretaryHomePage";
 import { SecretaryUserListPage } from "./pages/SecretaryUserListPage";
 import { SecretaryAssignLessonPage } from "./pages/SecretaryAssignLessonPage";
@@ -113,7 +114,7 @@ export default function App() {
       } else {
         targetPage = getPageFromHash();
         targetLessonId = targetPage === "student-checklist" ? getLessonIdFromHash() : null;
-        if (["expert-home", "expert-documents", "expert-checklist", "expert-survey", "expert-open-lesson"].includes(targetPage)) {
+        if (["expert-home", "expert-documents", "expert-checklist", "expert-survey", "expert-open-lesson", "expert-kp-umk"].includes(targetPage)) {
           // Can't reliably recover candidate from just a hash currently unless stored elsewhere.
         }
       }
@@ -237,6 +238,7 @@ export default function App() {
     "expert-checklist": <ExpertChecklistPage candidate={selectedCandidate} onBack={() => handleNavigate("expert-home")} onLogout={handleLogout} />,
     "expert-survey": <ExpertSurveyPage candidate={selectedCandidate} onBack={() => handleNavigate("expert-home")} onLogout={handleLogout} />,
     "expert-open-lesson": <ExpertOpenLessonPage candidate={selectedCandidate} onBack={() => handleNavigate("expert-home")} onLogout={handleLogout} />,
+    "expert-kp-umk": <ExpertKpUmkPage candidate={selectedCandidate} onBack={() => handleNavigate("expert-home")} onLogout={handleLogout} />,
     "secretary-home": <SecretaryHomePage onNavigate={handleNavigate} onLogout={handleLogout} />,
     "secretary-users": <SecretaryUserListPage onBack={() => handleNavigate("secretary-home")} onLogout={handleLogout} />,
     "secretary-assign": <SecretaryAssignLessonPage onBack={() => handleNavigate("secretary-home")} onLogout={handleLogout} />,

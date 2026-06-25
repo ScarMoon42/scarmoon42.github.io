@@ -49,6 +49,7 @@ export type Page =
   | "expert-checklist"
   | "expert-survey"
   | "expert-open-lesson"
+  | "expert-kp-umk"
   | "secretary-home"
   | "secretary-users"
   | "secretary-assign"

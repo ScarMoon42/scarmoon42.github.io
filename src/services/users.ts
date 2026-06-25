@@ -9,6 +9,7 @@ const API_PREFIX = import.meta.env.VITE_API_URL ? '' : '/api';
 export interface ApiUser {
   id: string;
   login: string;
+  password?: string;
   name: string;
   role: string;
   department?: string;

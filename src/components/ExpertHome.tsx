@@ -15,7 +15,7 @@ interface Candidate {
 
 interface ExpertHomeProps {
   candidate: Candidate | null;
-  onNavigate: (page: "expert-documents" | "expert-checklist" | "expert-survey" | "expert-open-lesson") => void;
+  onNavigate: (page: "expert-documents" | "expert-checklist" | "expert-survey" | "expert-open-lesson" | "expert-kp-umk") => void;
   onBackToCandidates: () => void;
   onLogout: () => void;
 }
@@ -148,7 +148,7 @@ export function ExpertHome({ candidate, onNavigate, onBackToCandidates, onLogout
           </p>
         </div>
 
-        <div className="grid grid-cols-3 gap-6 mt-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mt-12">
           <Card
             className="cursor-pointer hover:shadow-lg transition-shadow border-2"
             onClick={() => onNavigate("expert-documents")}
@@ -269,6 +269,37 @@ export function ExpertHome({ candidate, onNavigate, onBackToCandidates, onLogout
               </div>
               <p className="text-center">
                 Анкета<br />работодателя
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className="cursor-pointer hover:shadow-lg transition-shadow border-2"
+            onClick={() => onNavigate("expert-kp-umk")}
+          >
+            <CardContent className="pt-8 pb-8 flex flex-col items-center">
+              <div className="mb-4">
+                <svg
+                  width="100"
+                  height="100"
+                  viewBox="0 0 100 100"
+                  className="text-purple-500"
+                >
+                  <defs>
+                    <linearGradient id="gradientKpUmk" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#00bcd4" />
+                      <stop offset="100%" stopColor="#e91e63" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M25 30 H75 V70 H25 Z" fill="none" stroke="url(#gradientKpUmk)" strokeWidth="4" />
+                  <path d="M35 40 H65" stroke="url(#gradientKpUmk)" strokeWidth="3" />
+                  <path d="M35 50 H65" stroke="url(#gradientKpUmk)" strokeWidth="3" />
+                  <path d="M35 60 H55" stroke="url(#gradientKpUmk)" strokeWidth="3" />
+                  <circle cx="60" cy="35" r="5" fill="url(#gradientKpUmk)" />
+                </svg>
+              </div>
+              <p className="text-center">
+                Оценка КП/УМК
               </p>
             </CardContent>
           </Card>

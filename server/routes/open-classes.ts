@@ -38,6 +38,31 @@ function normalizeAnswer(value: unknown): string {
   return '';
 }
 
+function parseNumericOptionText(optionText: unknown): number | null {
+  const str = String(optionText).trim();
+  if (!str) return null;
+  const match = str.match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function isNumericRatingQuestion(question: GiftQuestion): boolean {
+  if (!question || !Array.isArray(question.options) || question.options.length <= 1) return false;
+  return question.options.every((opt) => {
+    const numericValue = parseNumericOptionText(opt.text);
+    return numericValue !== null && Number.isFinite(numericValue);
+  });
+}
+
+function getQuestionOptionWeight(question: GiftQuestion, option: { text?: string; isCorrect?: boolean; weight?: number }): number {
+  if (typeof option.weight === 'number') return option.weight;
+  if (option.isCorrect) return 100;
+  if (isNumericRatingQuestion(question)) {
+    const numericText = parseNumericOptionText(option.text);
+    return numericText !== null && Number.isFinite(numericText) ? numericText : 0;
+  }
+  return 0;
+}
+
 function getQuestionLabel(question: GiftQuestion, index: number): string {
   return question.title || question.text || `Вопрос ${index + 1}`;
 }
@@ -114,56 +139,63 @@ function buildTeacherTestDetails(
   const questionsDetails = questions.map((question, idx) => {
     const questionKey = String(idx);
     const selectedAnswer = normalizeAnswer(resultMap[questionKey]);
-    const selectedAnswers = Array.isArray(resultMap[questionKey]) 
+    const selectedAnswers = Array.isArray(resultMap[questionKey])
       ? (resultMap[questionKey] as any[]).map(a => normalizeAnswer(a))
       : (selectedAnswer !== '' ? [selectedAnswer] : []);
-    
+
     const correctAnswers = (question.correctAnswers ?? []).map((answer) => normalizeAnswer(answer));
-    
-    // Calculate max possible score for this question
+    const ratingQuestion = question.type === 'rating' || isNumericRatingQuestion(question);
     let questionMaxScore = 100;
     let gainedScore = 0;
-    
+
     if (question.options && Array.isArray(question.options)) {
-      // For weighted questions, max score is the sum of positive weights
-      const positiveWeights = question.options
-        .map((opt: any) => opt.weight ?? (opt.isCorrect ? 100 : 0))
-        .filter((w: number) => w > 0);
-      if (positiveWeights.length > 0) {
-        questionMaxScore = positiveWeights.reduce((a: number, b: number) => a + b, 0);
+      if (ratingQuestion) {
+        const numericOptions = question.options
+          .map((opt: any) => parseNumericOptionText(opt.text))
+          .filter((value: number | null): value is number => value !== null && Number.isFinite(value));
+        if (numericOptions.length > 0) {
+          questionMaxScore = Math.max(...numericOptions);
+        }
+      } else {
+        const positiveWeights = question.options
+          .map((opt: any) => getQuestionOptionWeight(question, opt))
+          .filter((w: number) => w > 0);
+        if (positiveWeights.length > 0) {
+          questionMaxScore = positiveWeights.reduce((a: number, b: number) => a + b, 0);
+        }
       }
 
-      // Calculate score for selected answers
       selectedAnswers.forEach((answer) => {
         if (answer !== '') {
-          const selectedOption = question.options?.find((opt: any) => 
+          const selectedOption = question.options?.find((opt: any) =>
             normalizeAnswer(opt.text) === answer
           );
           if (selectedOption) {
-            const weight = selectedOption.weight ?? (selectedOption.isCorrect ? 100 : 0);
-            gainedScore += Math.max(0, weight); // Only count positive weights
+            if (ratingQuestion) {
+              const numericValue = parseNumericOptionText(selectedOption.text);
+              gainedScore += numericValue !== null && Number.isFinite(numericValue) ? numericValue : 0;
+            } else {
+              const weight = getQuestionOptionWeight(question, selectedOption);
+              gainedScore += weight;
+            }
           }
         }
       });
     } else {
-      // Fallback for simple questions
       const isCorrect = selectedAnswers.length > 0 && selectedAnswers.some(ans => correctAnswers.includes(ans));
       gainedScore = isCorrect ? 100 : 0;
     }
 
-    // Cap gained score at max possible
-    gainedScore = Math.min(gainedScore, questionMaxScore);
+    gainedScore = Math.max(0, Math.min(gainedScore, questionMaxScore));
     totalScore += gainedScore;
     maxScore += questionMaxScore;
-
-    const isCorrect = gainedScore === 100 || (gainedScore > 0 && gainedScore === questionMaxScore);
 
     return {
       questionIndex: idx,
       questionText: getQuestionLabel(question, idx),
-      selectedAnswer: selectedAnswers.length > 0 ? selectedAnswers.join("; ") : "",
+      selectedAnswer: selectedAnswers.length > 0 ? selectedAnswers.join('; ') : '',
       correctAnswers,
-      isCorrect,
+      isCorrect: gainedScore === 100 || (gainedScore > 0 && gainedScore === questionMaxScore),
       score: gainedScore,
       maxScore: questionMaxScore,
     };

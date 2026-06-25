@@ -1,39 +1,194 @@
-# Информационная система поддержки принятия управленцеских решений в области кадровой политики - Документация проекта
+# Информационная система поддержки принятия управленческих решений в области кадровой политики
 
-Данный проект состоит из монолитного Node.js + TypeScript REST бэкенда и React + Vite фронтенда. Все исходники проекта находятся в папке `main`.
+Полнофункциональное веб-приложение для управления кадровой политикой с поддержкой различных ролей (администратор, учитель, ученик, эксперт и др.).
 
-## Структура проекта
-Весь основной код находится внутри директории `main`. 
-Поэтому **перед запуском любых команд необходимо перейти в неё**:
-```bash
-cd main
+## 🏗️ Архитектура
+
+Проект состоит из:
+- **Фронтенд**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Бэкенд**: Node.js + Express + TypeScript
+- **База данных**: PostgreSQL + Prisma ORM
+- **Аутентификация**: Keycloak
+- **Кеш**: Redis
+- **Деплой**: Docker + Docker Compose
+
+## 📁 Структура проекта
+
+```
+├── /src                 # Фронтенд на React
+│   ├── /components      # React компоненты
+│   ├── /pages           # Страницы приложения
+│   ├── /services        # API клиент и бизнес-логика
+│   ├── /auth            # Keycloak конфигурация
+│   ├── /lib             # Утилиты и помощники
+│   └── /styles          # CSS стили и конфигурация Tailwind
+├── /server              # REST API бэкенд
+│   ├── /routes          # API маршруты
+│   ├── /middleware      # Express middleware (auth, validation)
+│   └── /lib             # Вспомогательные функции
+├── /prisma              # Схема БД и миграции
+├── /infra               # Конфигурация инфраструктуры (Keycloak, Prometheus, Loki)
+├── /public              # Статические файлы
+├── Dockerfile           # Docker образ приложения
+├── docker-compose.yml   # Оркестрация сервисов
+└── vite.config.ts       # Конфигурация Vite
 ```
 
-Внутри папки `main` находятся следующие важные директории:
-*   `/src` - Исходный код фронтенда (React, компоненты, страницы, роутинг).
-*   `/server` - Исходный код бэкенда (Express, REST API, работа с базой данных).
-*   `/prisma` - Схема базы данных PostgreSQL и миграции.
+## 🚀 Требования
 
-## Требования для локальной разработки
-Для работы проекта локально вам понадобятся:
-1.  **Node.js 18+** и `npm`
-2.  **PostgreSQL** (URL указывается в файле `.env`)
-3.  **Ключ к Keycloak** (задаётся в конфигурации, сервер Keycloak обычно поднят на `http://127.0.0.1:8080`)
+- **Node.js**: 18+ версия
+- **npm**: 9+ версия
+- **Docker** и **Docker Compose** (для полного окружения)
+- **PostgreSQL**: 14+ версия (или в Docker контейнере)
+- **Redis** (для кеширования)
+- **Keycloak**: для аутентификации
 
-## Установка и запуск
-1. Откройте терминал в папке проекта.
-2. Перейдите в рабочую директорию: `cd main`
-3. Установите зависимости: `npm install`
-4. Настройте файл переменных окружения: создайте файл `.env` на основе `.env.example`.
-5. Синхронизируйте базу данных с Prisma: `npm run db:push`
-6. Запустите проект в режиме разработки. 
-   **Вам нужно открыть два терминала** в папке `main`:
-   *   **Терминал 1 (Фронтенд)**: `npm run dev` (запускает Vite на `http://127.0.0.1:3000`)
-   *   **Терминал 2 (Бэкенд)**: `npm run dev:server` (запускает Express API на порту 3001)
+## ⚙️ Локальная разработка
 
-## Дополнительные параметры
-*   `npm run build` - Сборка фронтенда в директорию `main/dist`.
-*   `npm test` - Запуск тестов.
+### Быстрый старт с Docker
 
-## Развертывание (Deployment)
-Проект настроен на автоматический деплой на GitHub Pages через GitHub Actions. При пуше в ветку `main` запускается файл `.github/workflows/deploy.yml`, который собирает проект и выкладывает папку `dist`. Бэкенд должен крутиться на отдельном сервере, а его адрес должен быть указан в файле `main/.env.production` (параметр `VITE_API_URL`).
+Убедитесь, что у вас есть все необходимые файлы конфигурации:
+- `/infra/loki-config.yml` - конфигурация логирования
+- `/infra/prometheus.yml` - конфигурация метрик
+- `/infra/keycloak/realm-app.json` - конфигурация Keycloak
+
+```bash
+# Запустить все сервисы (PostgreSQL, Redis, Keycloak, приложение)
+docker-compose up -d
+
+# Приложение будет доступно на http://localhost:3000
+# Keycloak на http://localhost:8080
+# PostgreSQL на localhost:5432
+# Redis на localhost:6379
+```
+
+### Разработка без Docker
+
+1. **Установка зависимостей**:
+   ```bash
+   npm install
+   ```
+
+2. **Настройка переменных окружения**:
+   Создайте файл `.env` в корне проекта:
+   ```bash
+   # PostgreSQL
+   DATABASE_URL="postgresql://user:password@localhost:5432/app_db"
+   
+   # Keycloak
+   KEYCLOAK_URL="http://127.0.0.1:8080"
+   KEYCLOAK_REALM="app"
+   KEYCLOAK_CLIENT_ID="app-client"
+   
+   # API
+   VITE_API_URL="http://localhost:3001"
+   
+   # Redis (опционально)
+   REDIS_URL="redis://localhost:6379"
+   ```
+
+3. **Инициализация БД**:
+   ```bash
+   npm run db:push        # Синхронизировать схему
+   npm run db:seed        # Заполнить тестовыми данными (если есть seed)
+   ```
+
+4. **Запуск приложения** (два терминала):
+   
+   **Терминал 1 - Фронтенд**:
+   ```bash
+   npm run dev           # Vite на http://localhost:3000
+   ```
+   
+   **Терминал 2 - Бэкенд**:
+   ```bash
+   npm run dev:server    # Express на http://localhost:3001
+   ```
+
+## 🛠️ Доступные команды
+
+```bash
+# Развитие
+npm run dev              # Запуск Vite (фронтенд)
+npm run dev:server       # Запуск Express (бэкенд)
+
+# Сборка
+npm run build            # Production сборка фронтенда
+npm run build:server     # Production сборка бэкенда
+
+# Тестирование
+npm test                 # Запуск Jest тестов
+npm run test:watch      # Режим watch
+
+# База данных
+npm run db:push         # Синхронизировать схему с БД
+npm run db:migrate      # Запустить миграции
+npm run db:studio       # Открыть Prisma Studio
+
+# Линтинг и форматирование
+npm run lint            # Проверить код
+npm run format          # Форматировать код
+```
+
+## 🔐 Аутентификация (Keycloak)
+
+Проект использует Keycloak для управления пользователями и ролями. 
+
+**Роли в системе**:
+- `admin` - Администратор системы
+- `secretary` - Секретарь
+- `teacher` - Учитель
+- `student` - Ученик
+- `expert` - Эксперт
+
+Конфигурация Keycloak находится в `/infra/keycloak/`.
+
+## 📦 Деплой в Production
+
+### С использованием Docker
+
+```bash
+docker-compose -f docker-compose.yml up -d --build
+```
+
+### На сервер (вручную)
+
+1. Собрать фронтенд:
+   ```bash
+   npm run build
+   ```
+
+2. Собрать бэкенд и запустить:
+   ```bash
+   npm run build:server
+   npm start
+   ```
+
+3. Статику фронтенда (`dist/`) раздавать через nginx или другой веб-сервер.
+
+## 📊 Мониторинг и логи
+
+Проект включает:
+- **Prometheus** для метрик (`/infra/prometheus.yml`)
+- **Loki** для логов (`/infra/loki-config.yml`)
+- Доступны через Docker Compose
+
+## 🤝 Разработка
+
+### Структура компонентов
+
+- `/src/components/ui` - переиспользуемые UI компоненты (Radix UI + Tailwind)
+- `/src/components/*.tsx` - страничные компоненты (Expert, Secretary, Teacher, Student, Admin)
+
+### API маршруты
+
+- `/server/routes/auth.ts` - аутентификация
+- `/server/routes/users.ts` - управление пользователями
+- `/server/routes/assignments.ts` - назначения
+- `/server/routes/candidates.ts` - кандидаты
+- `/server/routes/files.ts` - загрузка файлов
+- `/server/routes/metadata.ts` - метаданные
+
+## 📝 Лицензия
+
+Проект создан для нужд управления кадровой политикой.

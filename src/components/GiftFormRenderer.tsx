@@ -10,7 +10,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 export interface GiftQuestion {
     title?: string;
     text: string;
-    type: 'multiple_choice' | 'true_false' | 'short_answer' | 'essay' | 'numerical' | 'matching';
+    type: 'multiple_choice' | 'true_false' | 'short_answer' | 'essay' | 'numerical' | 'matching' | 'rating';
     options?: {
         text: string;
         isCorrect: boolean;
@@ -165,6 +165,47 @@ export function GiftFormRenderer({
                             )}
                         </div>
                     </RadioGroup>
+                );
+
+            case 'rating':
+                // Rating scale (horizontal buttons)
+                return (
+                    <div className="flex flex-col space-y-4">
+                        <RadioGroup
+                            value={answers[currentQuestionIdx]?.toString() || ""}
+                            onValueChange={(val) => handleAnswerChange(parseInt(val, 10))}
+                            className="flex flex-row justify-between items-center w-full gap-2 sm:gap-4"
+                        >
+                            {currentQuestion.options?.map((option, index) => {
+                                // Extract number from option text if it contains just a number
+                                const match = option.text.match(/\d+/);
+                                const numVal = match ? match[0] : String(index);
+                                
+                                return (
+                                    <div key={index} className="flex flex-col items-center flex-1">
+                                        <RadioGroupItem 
+                                            value={numVal} 
+                                            id={`rate-${index}`} 
+                                            className="sr-only" // Hide the default radio circle
+                                        />
+                                        <Label 
+                                            htmlFor={`rate-${index}`}
+                                            className={`
+                                                w-full py-3 px-2 text-center rounded-lg cursor-pointer transition-all border-2
+                                                ${answers[currentQuestionIdx]?.toString() === numVal 
+                                                    ? 'bg-purple-100 border-purple-500 text-purple-900 font-bold shadow-sm' 
+                                                    : 'bg-white border-gray-200 hover:border-purple-300 hover:bg-gray-50 text-gray-700'
+                                                }
+                                            `}
+                                        >
+                                            <span className="block text-lg mb-1">{numVal}</span>
+                                            <span className="block text-xs font-normal opacity-70 break-words">{option.text.replace(/\d+/g, '').trim()}</span>
+                                        </Label>
+                                    </div>
+                                );
+                            })}
+                        </RadioGroup>
+                    </div>
                 );
 
             case 'essay':

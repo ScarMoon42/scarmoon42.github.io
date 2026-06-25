@@ -38,6 +38,7 @@ router.get('/', requireAuth, requireAppRole(['Секретарь']), async (_req
       select: {
         id: true,
         login: true,
+        password: true,
         fullName: true,
         role: true,
         department: true,
@@ -49,6 +50,7 @@ router.get('/', requireAuth, requireAppRole(['Секретарь']), async (_req
     const list = users.map((u) => ({
       id: String(u.id),
       login: u.login,
+      password: u.password,
       name: u.fullName,
       role: u.role,
       department: u.department ?? undefined,
@@ -99,7 +101,7 @@ router.post(
         data: {
           externalId: kc.id,
           login: body.login.trim(),
-          password: null,
+          password: body.password,
           fullName: body.fullName.trim(),
           role: body.role,
           positions: body.positions ?? null,
@@ -272,44 +274,167 @@ function normalizeAnswer(value: unknown): string {
   return '';
 }
 
-function calculateSurveyScore(results: Array<{ result: string }>, maxScore: number = 10): number {
+function parseNumericAnswer(value: unknown): number | null {
+  if (value === true || String(value).toLowerCase() === 'true' || String(value).toLowerCase() === 'yes') {
+    return 3;
+  }
+  if (value === false || String(value).toLowerCase() === 'false' || String(value).toLowerCase() === 'no') {
+    return 0;
+  }
+  const strVal = String(value).trim();
+  if (!strVal) return null;
+  const match = strVal.match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function parseNumericOptionText(optionText: unknown): number | null {
+  const str = String(optionText).trim();
+  if (!str) return null;
+  const match = str.match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+function getSurveyQuestionMaxScale(parsedData: any, questionIndex: number, fallback = 3): number {
+  if (!parsedData || !Array.isArray(parsedData.questions)) return fallback;
+  const question = parsedData.questions[questionIndex];
+  if (!question || !Array.isArray(question.options) || question.options.length <= 1) return fallback;
+
+  const numericOptions = question.options
+    .map((opt: any) => parseNumericOptionText(opt.text))
+    .filter((num: number | null): num is number => num !== null && Number.isFinite(num));
+
+  if (numericOptions.length > 1) {
+    return Math.max(...numericOptions);
+  }
+
+  return fallback;
+}
+
+function isNumericRatingQuestion(question: any): boolean {
+  if (!question || !Array.isArray(question.options) || question.options.length <= 1) return false;
+  return question.options.every((opt: any) => {
+    const numericValue = parseNumericOptionText(opt.text);
+    return numericValue !== null && Number.isFinite(numericValue);
+  });
+}
+
+function getQuestionOptionWeight(question: any, option: any): number {
+  if (typeof option.weight === 'number') return option.weight;
+  if (option.isCorrect) return 100;
+  if (isNumericRatingQuestion(question)) {
+    const numericText = parseNumericOptionText(option.text);
+    return numericText !== null && Number.isFinite(numericText) ? numericText : 0;
+  }
+  return 0;
+}
+
+/**
+ * Считает балл по анкете с заданным числом вопросов и максимальным баллом за вопрос.
+ * Берёт все ответы, делит по вопросам (ключи 0..N-1), усредняет по числу заполнивших,
+ * нормирует на шкалу 0–3, возвращает итог не более numQuestions * pointsPerQuestion.
+ */
+function calculateSurveyScoreByQuestions(
+  results: Array<{ result: string; form?: { parsedData: string | null } }> | Array<{ result: string }>,
+  numQuestions: number,
+  pointsPerQuestion: number
+): number {
   if (results.length === 0) return 0;
+
+  const maxTotal = numQuestions * pointsPerQuestion;
+  const questionTotals: number[] = new Array(numQuestions).fill(0);
+  const questionCounts: number[] = new Array(numQuestions).fill(0);
+  const questionMaxScale: number[] = new Array(numQuestions).fill(0);
+
+  results.forEach((r) => {
+    try {
+      const parsedForm = (r as any).form?.parsedData ? JSON.parse((r as any).form.parsedData) : null;
+      const resObj = JSON.parse(r.result) as Record<string, unknown>;
+      Object.entries(resObj).forEach(([key, v]) => {
+        const qIdx = parseInt(key, 10);
+        if (isNaN(qIdx) || qIdx < 0 || qIdx >= numQuestions) return;
+
+        const parsedScale = getSurveyQuestionMaxScale(parsedForm, qIdx, 3);
+        questionMaxScale[qIdx] = Math.max(questionMaxScale[qIdx], parsedScale);
+
+        const num = parseNumericAnswer(v);
+        if (num !== null && !isNaN(num)) {
+          questionTotals[qIdx] += num;
+          questionCounts[qIdx]++;
+        }
+      });
+    } catch { /* ignore */ }
+  });
+
+  let totalScore = 0;
+  for (let i = 0; i < numQuestions; i++) {
+    if (questionCounts[i] === 0) continue;
+    const avg = questionTotals[i] / questionCounts[i];
+    const scale = questionMaxScale[i] > 0 ? questionMaxScale[i] : 3;
+    totalScore += Math.round((avg / scale) * pointsPerQuestion * 10) / 10;
+  }
+
+  return Math.min(maxTotal, Math.round(totalScore * 10) / 10);
+}
+
+/**
+ * Считает балл по чек-листу эксперта на открытом занятии.
+ * numGroups — число групп компетенций, pointsPerGroup — баллов за группу (итого numGroups * pointsPerGroup).
+ * Если вопросы разбиты по группам равномерно, делим на numGroups равных сегментов.
+ */
+function calculateChecklistScore(
+  results: Array<{ result: string }>,
+  numGroups: number,
+  pointsPerGroup: number
+): number {
+  if (results.length === 0) return 0;
+  const maxTotal = numGroups * pointsPerGroup;
+
+  // Собираем все числовые ответы из всех результатов
   let totalVal = 0;
   let count = 0;
+  let maxObservedValue = 0;
   results.forEach(r => {
     try {
-      const resObj = JSON.parse(r.result);
-      Object.values(resObj).forEach((v: any) => {
+      const resObj = JSON.parse(r.result) as Record<string, unknown>;
+      Object.values(resObj).forEach((v) => {
         let num: number | null = null;
         if (v === true || String(v).toLowerCase() === 'true' || String(v).toLowerCase() === 'yes') {
-          num = 4;
+          num = 3;
         } else if (v === false || String(v).toLowerCase() === 'false' || String(v).toLowerCase() === 'no') {
-          num = 1;
+          num = 0;
         } else {
-          const strVal = String(v);
-          const match = strVal.match(/\d+/);
-          if (match) {
-            num = parseInt(match[0], 10);
-          }
+          const strVal = String(v).trim();
+          const match = strVal.match(/-?\d+(?:\.\d+)?/);
+          if (match) num = Number(match[0]);
         }
-
         if (num !== null && !isNaN(num)) {
           totalVal += num;
           count++;
+          maxObservedValue = Math.max(maxObservedValue, num);
         }
       });
-    } catch (e) { /* ignore parse errors */ }
+    } catch { /* ignore */ }
   });
 
   if (count === 0) return 0;
   const average = totalVal / count;
-  // Assume standard Likert scale (1-4). If average >= 4, it gives maxScore.
-  return Math.min(maxScore, Math.round((average / 4) * maxScore));
+  const scale = maxObservedValue > 0 ? maxObservedValue : 3;
+  const score = Math.round((average / scale) * maxTotal * 10) / 10;
+  return Math.min(maxTotal, score);
 }
 
-function calculateTeacherTestScore(results: Array<{ result: string; test: { parsedData: string | null } }>): number {
+/**
+ * Считает балл за тестирование: numQuestions вопросов × pointsPerQuestion балла.
+ * Итоговый балл = процент правильных × (numQuestions * pointsPerQuestion).
+ */
+function calculateTeacherTestScoreNew(
+  results: Array<{ result: string; test: { parsedData: string | null } }>,
+  numQuestions: number,
+  pointsPerQuestion: number
+): number {
   if (results.length === 0) return 0;
-  
+  const maxTotal = numQuestions * pointsPerQuestion; // 20 × 0.5 = 10
+
   let totalPercentage = 0;
   let validTestsCount = 0;
 
@@ -327,44 +452,54 @@ function calculateTeacherTestScore(results: Array<{ result: string; test: { pars
       questions.forEach((question: any, idx: number) => {
         const questionKey = String(idx);
         const selectedAnswer = answersMap[questionKey] !== undefined ? normalizeAnswer(answersMap[questionKey]) : '';
-        const selectedAnswers = Array.isArray(answersMap[questionKey]) 
+        const selectedAnswers = Array.isArray(answersMap[questionKey])
           ? (answersMap[questionKey] as any[]).map(a => normalizeAnswer(a))
           : (selectedAnswer !== '' ? [selectedAnswer] : []);
-        
-        // Calculate max possible score for this question
+
         let questionMaxScore = 100;
         let gainedScore = 0;
-        
+        const ratingQuestion = question.type === 'rating' || isNumericRatingQuestion(question);
+
         if (question.options && Array.isArray(question.options)) {
-          // For weighted questions, max score is the sum of positive weights
-          const positiveWeights = question.options
-            .map((opt: any) => opt.weight ?? (opt.isCorrect ? 100 : 0))
-            .filter((w: number) => w > 0);
-          if (positiveWeights.length > 0) {
-            questionMaxScore = positiveWeights.reduce((a: number, b: number) => a + b, 0);
+          if (ratingQuestion) {
+            const numericOptions = question.options
+              .map((opt: any) => parseNumericOptionText(opt.text))
+              .filter((value: number | null): value is number => value !== null && Number.isFinite(value));
+            if (numericOptions.length > 0) {
+              questionMaxScore = Math.max(...numericOptions);
+            }
+          } else {
+            const positiveWeights = question.options
+              .map((opt: any) => getQuestionOptionWeight(question, opt))
+              .filter((w: number) => w > 0);
+            if (positiveWeights.length > 0) {
+              questionMaxScore = positiveWeights.reduce((a: number, b: number) => a + b, 0);
+            }
           }
 
-          // Calculate score for selected answers
           selectedAnswers.forEach((answer) => {
             if (answer !== '') {
-              const selectedOption = question.options.find((opt: any) => 
+              const selectedOption = question.options.find((opt: any) =>
                 normalizeAnswer(opt.text) === answer
               );
               if (selectedOption) {
-                const weight = selectedOption.weight ?? (selectedOption.isCorrect ? 100 : 0);
-                gainedScore += Math.max(0, weight); // Only count positive weights
+                if (ratingQuestion) {
+                  const numericValue = parseNumericOptionText(selectedOption.text);
+                  gainedScore += numericValue !== null && Number.isFinite(numericValue) ? numericValue : 0;
+                } else {
+                  const weight = getQuestionOptionWeight(question, selectedOption);
+                  gainedScore += weight;
+                }
               }
             }
           });
         } else {
-          // Fallback for simple questions without options structure
           const correctAnswers = (question.correctAnswers ?? []).map((ans: any) => normalizeAnswer(ans));
           const isCorrect = selectedAnswers.length > 0 && selectedAnswers.some(ans => correctAnswers.includes(ans));
           gainedScore = isCorrect ? 100 : 0;
         }
 
-        // Cap gained score at max possible
-        gainedScore = Math.min(gainedScore, questionMaxScore);
+        gainedScore = Math.max(0, Math.min(gainedScore, questionMaxScore));
         totalScore += gainedScore;
         maxScore += questionMaxScore;
       });
@@ -373,12 +508,12 @@ function calculateTeacherTestScore(results: Array<{ result: string; test: { pars
         totalPercentage += totalScore / maxScore;
         validTestsCount++;
       }
-    } catch (e) { /* ignore parse errors */ }
+    } catch { /* ignore */ }
   });
 
   if (validTestsCount === 0) return 0;
   const averagePercentage = totalPercentage / validTestsCount;
-  return Math.min(20, Math.round(averagePercentage * 20));
+  return Math.min(maxTotal, Math.round(averagePercentage * maxTotal * 10) / 10);
 }
 
 // GET /users/ranking — рейтинг преподавателей (для секретаря)
@@ -397,49 +532,81 @@ router.get('/ranking', requireAuth, requireAppRole(['Секретарь']), asyn
     const ranking = [];
 
     for (const teacher of teachers) {
-      // 1. УМК (Category 1) - max 20
-      const umkFiles = await prisma.file.findMany({
-        where: { userId: teacher.id, comment: { contains: 'УМК' } },
+      // ─────────────────────────────────────────────────────────────────────
+      // 1. Оценка курсового проекта / УМК — 10 баллов (5 показателей по 2 б.)
+      //    Оценка проводится через экспертную форму, загруженную секретарем.
+      // ─────────────────────────────────────────────────────────────────────
+      const expertKpUmkResults = await prisma.resultFiles.findMany({
+        where: {
+          teacherId: teacher.id,
+          form: { formType: 'expert_kp_umk' },
+        },
+        include: { form: { select: { parsedData: true } } },
       });
-      const cat1ScoreRaw = umkFiles.filter(f => f.status === 'Принято').length * 5;
-      const cat1Score = Math.min(20, cat1ScoreRaw);
+      const cat1Score = calculateSurveyScoreByQuestions(expertKpUmkResults, 5, 2);
 
-      // 2. ПК (Category 2) - max 10
+      // ─────────────────────────────────────────────────────────────────────
+      // 2. Документы ПК (за последние 3 года) — 10 баллов
+      //    1 документ = 1 балл, не более 10 документов
+      // ─────────────────────────────────────────────────────────────────────
+      const threeYearsAgo = new Date();
+      threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
       const pkFiles = await prisma.file.findMany({
-        where: { userId: teacher.id, comment: { contains: 'ПК' } },
+        where: {
+          userId: teacher.id,
+          status: 'Принято',
+          OR: [
+            { comment: { contains: 'ПК' } },
+            { comment: { contains: 'повышение квалификации' } },
+            { comment: { contains: 'квалификац' } },
+          ],
+          createdAt: { gte: threeYearsAgo },
+        },
       });
-      const cat2ScoreRaw = pkFiles.filter(f => f.status === 'Принято').length * 2;
-      const cat2Score = Math.min(10, cat2ScoreRaw);
+      const pkCount = Math.min(pkFiles.length, 10);
+      const cat2Score = pkCount; // 1 б. за документ, max 10
 
-      // 3. Студенты (Category 3) - max 10
+      // ─────────────────────────────────────────────────────────────────────
+      // 3. Анкета обучающихся — 15 баллов (5 вопросов по 3 б.)
+      // ─────────────────────────────────────────────────────────────────────
       const studentResults = await prisma.resultOpenClassStudent.findMany({
         where: { openClass: { teacherId: teacher.id } },
       });
-      const cat3Score = calculateSurveyScore(studentResults, 10);
+      const cat3Score = calculateSurveyScoreByQuestions(studentResults, 5, 3);
 
-      // 4. Тесты (Category 4) - max 20
-      const testResults = await prisma.resultTestTeacher.findMany({
-        where: { teacherId: teacher.id },
-        include: { test: true },
+      // ─────────────────────────────────────────────────────────────────────
+      // 4. Чек-лист эксперта (открытое занятие) — 40 баллов
+      //    4 группы компетенций по 10 б.
+      // ─────────────────────────────────────────────────────────────────────
+      const expertOpenClassResults = await prisma.resultOpenClassExpert.findMany({
+        where: { openClass: { teacherId: teacher.id } },
       });
-      const cat4Score = calculateTeacherTestScore(testResults);
+      const cat4Score = calculateChecklistScore(expertOpenClassResults, 4, 10);
 
-      // 5. Экспертная оценка файлов (Анкетирование работодателем) (Category 5) - max 10
-      const expertResultFiles = await prisma.resultFiles.findMany({
+      // ─────────────────────────────────────────────────────────────────────
+      // 5. Анкета работодателей — 15 баллов (5 показателей по 3 б.)
+      // ─────────────────────────────────────────────────────────────────────
+      const employerResults = await prisma.resultFiles.findMany({
         where: {
           teacherId: teacher.id,
           form: { formType: 'expert_file_eval' },
         },
+        include: { form: { select: { parsedData: true } } },
       });
-      const cat5Score = calculateSurveyScore(expertResultFiles, 10);
+      const cat5Score = calculateSurveyScoreByQuestions(employerResults, 5, 3);
 
-      // 6. Оценка открытого занятия экспертами (Category 6) - max 10
-      const expertResultOpenClasses = await prisma.resultOpenClassExpert.findMany({
-        where: { openClass: { teacherId: teacher.id } }
+      // ─────────────────────────────────────────────────────────────────────
+      // 6. Тестирование — 10 баллов (20 вопросов по 0,5 б.)
+      // ─────────────────────────────────────────────────────────────────────
+      const testResults = await prisma.resultTestTeacher.findMany({
+        where: { teacherId: teacher.id },
+        include: { test: true },
       });
-      const cat6Score = calculateSurveyScore(expertResultOpenClasses, 10);
+      const cat6Score = calculateTeacherTestScoreNew(testResults, 20, 0.5);
 
-      const totalRating = cat1Score + cat2Score + cat3Score + cat4Score + cat5Score + cat6Score;
+      const totalRating = Math.round(
+        (cat1Score + cat2Score + cat3Score + cat4Score + cat5Score + cat6Score) * 10
+      ) / 10;
 
       ranking.push({
         id: String(teacher.id),
@@ -448,15 +615,48 @@ router.get('/ranking', requireAuth, requireAppRole(['Секретарь']), asyn
         department: teacher.department || 'Не указана',
         rating: totalRating,
         details: [
-          { category: "1 Оценка УМК", score: cat1Score, maxScore: 20 },
-          { category: "2 Повышение квалификации", score: cat2Score, maxScore: 10 },
-          { category: "3 Анкетирование обучающихся", score: cat3Score, maxScore: 10 },
-          { category: "4 Предметные компетенции (тест)", score: cat4Score, maxScore: 20 },
-          { category: "5 Анкетирование работодателем", score: cat5Score, maxScore: 10 },
-          { category: "6 Оценка открытого занятия экспертами", score: cat6Score, maxScore: 10 },
+          {
+            category: 'Оценка курсового проекта / УМК',
+            score: cat1Score,
+            maxScore: 10,
+            hint: `5 показателей по 2 б. (оценено: ${expertKpUmkResults.length})`,
+          },
+          {
+            category: 'Документы ПК (за последние 3 года)',
+            score: cat2Score,
+            maxScore: 10,
+            hint: `1 документ = 1 б. (принято: ${pkCount} из 10)`,
+          },
+          {
+            category: 'Анкета обучающихся',
+            score: cat3Score,
+            maxScore: 15,
+            hint: '5 вопросов по 3 б.',
+          },
+          {
+            category: 'Чек-лист эксперта (открытое занятие)',
+            score: cat4Score,
+            maxScore: 40,
+            hint: '4 группы компетенций по 10 б.',
+          },
+          {
+            category: 'Анкета работодателей',
+            score: cat5Score,
+            maxScore: 15,
+            hint: '5 показателей по 3 б.',
+          },
+          {
+            category: 'Тестирование',
+            score: cat6Score,
+            maxScore: 10,
+            hint: '20 вопросов по 0,5 б.',
+          },
         ],
       });
     }
+
+    // Сортируем по убыванию рейтинга
+    ranking.sort((a, b) => b.rating - a.rating);
 
     return res.json({ success: true, data: ranking });
   } catch (e) {

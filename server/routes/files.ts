@@ -304,7 +304,7 @@ router.post(
         name: string;
         description?: string;
         giftContent: string;
-        formType: 'student_open_lesson' | 'expert_open_lesson' | 'expert_file_eval' | 'teacher_test';
+        formType: 'student_open_lesson' | 'expert_open_lesson' | 'expert_file_eval' | 'expert_kp_umk' | 'teacher_test';
       };
 
       if (!body.name || !body.giftContent || !body.formType) {
@@ -314,7 +314,7 @@ router.post(
         });
       }
 
-      const validTypes = ['student_open_lesson', 'expert_open_lesson', 'expert_file_eval', 'teacher_test'];
+      const validTypes = ['student_open_lesson', 'expert_open_lesson', 'expert_file_eval', 'expert_kp_umk', 'teacher_test'];
       if (!validTypes.includes(body.formType)) {
         return res.status(400).json({
           success: false,
@@ -552,7 +552,7 @@ async function handleGiftSubmit(req: Request, res: Response) {
           result: JSON.stringify(answers)
         }
       });
-    } else if (form.formType === 'expert_file_eval' || form.formType === 'expert_open_lesson') {
+    } else if (form.formType === 'expert_file_eval' || form.formType === 'expert_open_lesson' || form.formType === 'expert_kp_umk') {
       const tid = teacherId || (req.body as any).teacherId;
       if (!tid) return res.status(400).json({ success: false, message: 'Укажите teacherId для экспертной анкеты' });
 

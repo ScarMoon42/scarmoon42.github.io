@@ -18,6 +18,8 @@ interface SecretaryRatingProps {
   onLogout: () => void;
 }
 
+const RATING_MAX = 100; // Максимальный суммарный балл
+
 export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
   const [teachers, setTeachers] = useState<RankingTeacher[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +79,7 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
           </div>
         ) : sortedTeachers.length === 0 ? (
           <div className="flex min-h-[400px] flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-white p-12">
-            <p className="text-gray-500">Данные о преподавателях не найдены. Убедитесь, что в системе есть пользователи с ролью "Преподаватель".</p>
+            <p className="text-gray-500">Данные о преподавателях не найдены. Убедитесь, что в системе есть пользователи с ролью &quot;Преподаватель&quot;.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -107,7 +109,7 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
                     </div>
                     <div className="text-right">
                       <div className="text-3xl text-purple-600">{teacher.rating}</div>
-                      <div className="text-xs text-gray-500">баллов</div>
+                      <div className="text-xs text-gray-500">из {RATING_MAX} баллов</div>
                     </div>
                   </div>
 
@@ -129,16 +131,10 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
 
                   <div className="mt-4">
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      {(() => {
-                        const totalMax = teacher.details.reduce((sum, d) => sum + d.maxScore, 0);
-                        const percentage = totalMax > 0 ? (teacher.rating / totalMax) * 100 : 0;
-                        return (
-                          <div
-                            className="bg-purple-600 h-2 rounded-full transition-all"
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        );
-                      })()}
+                      <div
+                        className="bg-purple-600 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, (teacher.rating / RATING_MAX) * 100)}%` }}
+                      ></div>
                     </div>
                   </div>
                 </CardContent>
@@ -171,7 +167,7 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
                   </div>
                   <div className="mt-3 text-right">
                     <span className="text-2xl text-purple-600">{selectedTeacher.rating}</span>
-                    <span className="text-gray-600"> баллов</span>
+                    <span className="text-gray-600"> / {RATING_MAX} баллов</span>
                   </div>
                 </div>
 
@@ -188,31 +184,27 @@ export function SecretaryRating({ onBack, onLogout }: SecretaryRatingProps) {
                         {selectedTeacher.details.map((detail, index) => (
                           <tr
                             key={index}
-                            className={`border-t border-blue-200 ${detail.maxScore === 0 ? "bg-blue-50" : "bg-white"
-                              }`}
+                            className="border-t border-blue-200 bg-white"
                           >
                             <td className="px-4 py-3">
-                              <span className={detail.maxScore === 0 ? "" : "ml-4"}>
-                                {detail.category}
-                              </span>
+                              <div className="font-medium">{detail.category}</div>
+                              {(detail as any).hint && (
+                                <div className="text-xs text-gray-500 mt-0.5">{(detail as any).hint}</div>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-center">
-                              {detail.maxScore > 0 ? (
-                                <span>
-                                  {detail.score}/{detail.maxScore}
-                                </span>
-                              ) : (
-                                <span className="text-gray-400">—</span>
-                              )}
+                              <span>
+                                {detail.score}/{detail.maxScore}
+                              </span>
                             </td>
                           </tr>
                         ))}
                         <tr className="bg-blue-100 border-t-2 border-blue-300">
                           <td className="px-4 py-3">
-                            <strong>Всего</strong>
+                            <strong>Итого</strong>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <strong>{selectedTeacher.rating}</strong>
+                            <strong>{selectedTeacher.rating}/{RATING_MAX}</strong>
                           </td>
                         </tr>
                       </tbody>

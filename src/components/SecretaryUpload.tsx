@@ -16,7 +16,7 @@ interface GiftItem {
   formType?: string;
 }
 
-type GiftType = 'student_open_lesson' | 'expert_open_lesson' | 'expert_file_eval' | 'teacher_test';
+type GiftType = 'student_open_lesson' | 'expert_open_lesson' | 'expert_file_eval' | 'expert_kp_umk' | 'teacher_test';
 
 export function SecretaryUpload({ onBack }: SecretaryUploadProps) {
   const [name, setName] = useState('');
@@ -73,7 +73,8 @@ export function SecretaryUpload({ onBack }: SecretaryUploadProps) {
     switch (type) {
       case 'student_open_lesson': return 'Студенты (Открытое занятие)';
       case 'expert_open_lesson': return 'Эксперты (Открытое занятие)';
-      case 'expert_file_eval': return 'Эксперты (Оценка файлов)';
+      case 'expert_file_eval': return 'Анкета работодателя';
+      case 'expert_kp_umk': return 'Эксперты (Оценка КП/УМК)';
       case 'teacher_test': return 'Тест преподавателя';
       default: return type;
     }
@@ -127,7 +128,8 @@ export function SecretaryUpload({ onBack }: SecretaryUploadProps) {
                     >
                       <option value="student_open_lesson">Анкета студента (Открытое занятие)</option>
                       <option value="expert_open_lesson">Анкета эксперта (Открытое занятие)</option>
-                      <option value="expert_file_eval">Анкета эксперта (Оценка файлов)</option>
+                      <option value="expert_file_eval">Анкета работодателя</option>
+                      <option value="expert_kp_umk">Анкета эксперта (Оценка КП/УМК)</option>
                       <option value="teacher_test">Тест для преподавателя</option>
                     </select>
                   </div>

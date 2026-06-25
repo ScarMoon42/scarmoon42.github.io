@@ -14,6 +14,7 @@ const PAGE_TO_HASH: Record<Page, string> = {
   "expert-checklist": "expert-checklist",
   "expert-survey": "expert-survey",
   "expert-open-lesson": "expert-open-lesson",
+  "expert-kp-umk": "expert-kp-umk",
   "secretary-home": "secretary-home",
   "secretary-users": "secretary-users",
   "secretary-assign": "secretary-assign",
